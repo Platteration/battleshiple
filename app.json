@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Battleshiple",
+    "slug": "battleshiple",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#061a2b",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#061a2b"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.platteration.battleshiple"
+    },
+    "android": {
+      "package": "com.platteration.battleshiple",
+      "adaptiveIcon": {
+        "backgroundColor": "#061a2b",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

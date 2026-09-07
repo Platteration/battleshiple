@@ -1,8 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   Coord,
+  Difficulty,
   GameMode,
   GameState,
   Maneuver,
@@ -17,6 +19,8 @@ import {
   maneuver,
   randomFleet,
 } from './src/engine';
+import { clearGame, loadGame, saveGame } from './src/storage';
+import { feedback } from './src/ui/feedback';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
 import { HandoffScreen } from './src/ui/screens/HandoffScreen';
@@ -37,17 +41,58 @@ function playerNames(mode: GameMode): [string, string] {
   return mode === 'ai' ? ['You', AI_NAME] : ['Player 1', 'Player 2'];
 }
 
+function describeSave(state: GameState, savedAt: number): string {
+  const mode = state.mode === 'ai' ? 'vs Computer' : 'Pass & Play';
+  const turn = Math.floor(state.turn / 2) + 1;
+  const days = Math.floor((Date.now() - savedAt) / 86400000);
+  const when = days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  return `${mode} · turn ${turn} · saved ${when}`;
+}
+
 export default function App() {
   const [mode, setMode] = useState<GameMode>('ai');
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [fleets, setFleets] = useState<[Ship[] | null, Ship[] | null]>([null, null]);
   const [game, setGame] = useState<GameState | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [saved, setSaved] = useState<{ state: GameState; difficulty: Difficulty; label: string } | null>(null);
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
-    if (aiTimer.current) clearTimeout(aiTimer.current);
+  // Offer to resume whatever was left unfinished.
+  useEffect(() => {
+    let alive = true;
+    void loadGame().then((s) => {
+      if (alive && s) {
+        setSaved({ state: s.state, difficulty: s.difficulty, label: describeSave(s.state, s.savedAt) });
+      }
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  useEffect(
+    () => () => {
+      if (aiTimer.current) clearTimeout(aiTimer.current);
+      if (overTimer.current) clearTimeout(overTimer.current);
+    },
+    [],
+  );
+
+  // Autosave whenever the board changes, and again when the app is backgrounded.
+  useEffect(() => {
+    if (!game || game.phase === 'over') return;
+    void saveGame(game, difficulty);
+  }, [game, difficulty]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active' && game && game.phase !== 'over') void saveGame(game, difficulty);
+    });
+    return () => sub.remove();
+  }, [game, difficulty]);
 
   const names = playerNames(mode);
 
@@ -58,14 +103,12 @@ export default function App() {
     setScreen({ name: 'setup', player: 0 });
   }, []);
 
-  const beginGame = useCallback(
-    (f0: Ship[], f1: Ship[], m: GameMode) => {
-      const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
-      setGame(g);
-      setScreen({ name: 'game' });
-    },
-    [],
-  );
+  const beginGame = useCallback((f0: Ship[], f1: Ship[], m: GameMode) => {
+    const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
+    setSaved(null);
+    setGame(g);
+    setScreen({ name: 'game' });
+  }, []);
 
   const onSetupReady = useCallback(
     (ships: Ship[]) => {
@@ -86,37 +129,47 @@ export default function App() {
     [screen, mode, fleets, beginGame],
   );
 
-  /** Run the computer's whole turn after a short pause, then hand control back. */
-  const scheduleAiTurn = useCallback((g: GameState) => {
-    setAiBusy(true);
-    aiTimer.current = setTimeout(() => {
-      let s = g;
-      try {
-        const ai = s.current;
-        const shot = aiChooseShot(s, ai, defaultRng);
-        const res = fire(s, shot);
-        s = res.state;
-        if (s.phase !== 'over') {
-          const mv = aiChooseManeuver(s, ai, defaultRng);
-          if (mv) s = maneuver(s, mv.shipId, mv.maneuver);
-          s = endTurn(s);
+  /** Play the computer's whole turn after a pause, then hand control back. */
+  const scheduleAiTurn = useCallback(
+    (g: GameState, level: Difficulty) => {
+      setAiBusy(true);
+      aiTimer.current = setTimeout(() => {
+        let s = g;
+        try {
+          const ai = s.current;
+          const res = fire(s, aiChooseShot(s, ai, defaultRng, level));
+          s = res.state;
+          if (res.result.result === 'hit') feedback.incoming();
+          if (s.phase !== 'over') {
+            const mv = aiChooseManeuver(s, ai, defaultRng, level);
+            if (mv) s = maneuver(s, mv.shipId, mv.maneuver);
+            s = endTurn(s);
+          }
+        } finally {
+          setAiBusy(false);
         }
-      } finally {
-        setAiBusy(false);
-      }
-      setGame(s);
-      if (s.phase === 'over') setScreen({ name: 'over' });
-    }, AI_DELAY_MS);
-  }, []);
+        setGame(s);
+        if (s.phase === 'over') {
+          void clearGame();
+          setScreen({ name: 'over' });
+        }
+      }, AI_DELAY_MS);
+    },
+    [],
+  );
 
   const onFire = useCallback(
     (coord: Coord) => {
       if (!game) return;
       const res = fire(game, coord);
+      if (res.result.sunk) feedback.sunk();
+      else if (res.result.result === 'hit') feedback.hit();
+      else feedback.miss();
       setGame(res.state);
       if (res.state.phase === 'over') {
-        // Let the player see the final hit before the summary.
-        setTimeout(() => setScreen({ name: 'over' }), 700);
+        void clearGame();
+        // Let the winning hit land on screen before the summary.
+        overTimer.current = setTimeout(() => setScreen({ name: 'over' }), 700);
       }
     },
     [game],
@@ -125,6 +178,7 @@ export default function App() {
   const onManeuver = useCallback(
     (shipId: string, m: Maneuver) => {
       if (!game) return;
+      feedback.maneuver();
       setGame(maneuver(game, shipId, m));
     },
     [game],
@@ -135,49 +189,77 @@ export default function App() {
     const next = endTurn(game);
     setGame(next);
     if (next.mode === 'ai') {
-      scheduleAiTurn(next);
+      scheduleAiTurn(next, difficulty);
     } else {
       setScreen({ name: 'handoff', player: next.current, reason: 'turn' });
     }
-  }, [game, scheduleAiTurn]);
+  }, [game, difficulty, scheduleAiTurn]);
 
   const goHome = useCallback(() => {
     if (aiTimer.current) clearTimeout(aiTimer.current);
+    if (overTimer.current) clearTimeout(overTimer.current);
     setAiBusy(false);
+    // Keep an unfinished game so it can be picked up from the menu.
+    if (game && game.phase !== 'over') {
+      void saveGame(game, difficulty);
+      setSaved({ state: game, difficulty, label: describeSave(game, Date.now()) });
+    }
     setGame(null);
     setScreen({ name: 'home' });
+  }, [game, difficulty]);
+
+  const onResume = useCallback(() => {
+    if (!saved) return;
+    setMode(saved.state.mode);
+    setDifficulty(saved.difficulty);
+    setGame(saved.state);
+    setSaved(null);
+    setScreen(
+      saved.state.mode === 'local' && saved.state.phase === 'fire'
+        ? { name: 'handoff', player: saved.state.current, reason: 'turn' }
+        : { name: 'game' },
+    );
+  }, [saved]);
+
+  const onDiscardSave = useCallback(() => {
+    setSaved(null);
+    void clearGame();
   }, []);
+
+  const home = (
+    <HomeScreen
+      difficulty={difficulty}
+      onDifficultyChange={setDifficulty}
+      onStart={startSetup}
+      resume={saved ? { label: saved.label, onResume, onDiscard: onDiscardSave } : undefined}
+    />
+  );
 
   let content: React.ReactNode;
   switch (screen.name) {
     case 'home':
-      content = <HomeScreen onStart={startSetup} />;
+      content = home;
       break;
     case 'setup':
       content = (
-        <SetupScreen
-          key={screen.player}
-          playerName={names[screen.player]}
-          onReady={onSetupReady}
-          onBack={goHome}
-        />
+        <SetupScreen key={screen.player} playerName={names[screen.player]} onReady={onSetupReady} onBack={goHome} />
       );
       break;
     case 'handoff':
       content = (
         <HandoffScreen
           playerName={names[screen.player]}
-          message={screen.reason === 'setup' ? 'Deploy your fleet without the other admiral watching.' : 'Your turn. Keep the screen hidden until the device is in your hands.'}
+          message={
+            screen.reason === 'setup'
+              ? 'Deploy your fleet without the other admiral watching.'
+              : 'Your turn. Keep the screen hidden until the device is in your hands.'
+          }
           onReady={() => setScreen(screen.reason === 'setup' ? { name: 'setup', player: screen.player } : { name: 'game' })}
         />
       );
       break;
     case 'game':
-      if (!game) {
-        content = <HomeScreen onStart={startSetup} />;
-        break;
-      }
-      content = (
+      content = game ? (
         <GameScreen
           state={game}
           viewer={game.mode === 'ai' ? 0 : game.current}
@@ -187,13 +269,15 @@ export default function App() {
           onEndTurn={onEndTurn}
           onQuit={goHome}
         />
+      ) : (
+        home
       );
       break;
     case 'over':
       content = game ? (
         <GameOverScreen state={game} onRematch={() => startSetup(game.mode)} onHome={goHome} />
       ) : (
-        <HomeScreen onStart={startSetup} />
+        home
       );
       break;
   }

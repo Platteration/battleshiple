@@ -1,15 +1,32 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { FLEET, SHIP_CLASSES, GameMode } from '../../engine';
+import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { Segmented } from '../components/Segmented';
 import { colors, radius, shipColors, spacing } from '../theme';
 
 interface Props {
+  difficulty: Difficulty;
+  onDifficultyChange: (d: Difficulty) => void;
   onStart: (mode: GameMode) => void;
+  /** Present when an unfinished game is on disk. */
+  resume?: { label: string; onResume: () => void; onDiscard: () => void };
 }
 
-export function HomeScreen({ onStart }: Props) {
+const DIFFICULTIES: { value: Difficulty; label: string }[] = [
+  { value: 'easy', label: 'Easy' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'hard', label: 'Hard' },
+];
+
+const DIFFICULTY_BLURB: Record<Difficulty, string> = {
+  easy: 'Fires loosely and rarely repositions.',
+  normal: 'Hunts methodically and chases hits.',
+  hard: 'Reads your splashes to hunt the quadrant you moved into.',
+};
+
+export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: Props) {
   const [showRules, setShowRules] = useState(false);
   return (
     <Screen>
@@ -17,6 +34,18 @@ export function HomeScreen({ onStart }: Props) {
         <Text style={styles.title}>BATTLESHIPLE</Text>
         <Text style={styles.subtitle}>Battleship, but the fleets won't sit still.</Text>
       </View>
+
+      {resume && (
+        <View style={styles.resume}>
+          <Text style={styles.resumeLabel}>Unfinished battle</Text>
+          <Text style={styles.resumeMeta}>{resume.label}</Text>
+          <Button title="Resume game" onPress={resume.onResume} />
+          <Button title="Discard" variant="ghost" small onPress={resume.onDiscard} />
+        </View>
+      )}
+
+      <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
+      <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
 
       <Button title="Play vs Computer" onPress={() => onStart('ai')} />
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />
@@ -35,7 +64,7 @@ export function HomeScreen({ onStart }: Props) {
           <Text style={styles.h2}>Splashes</Text>
           <Text style={styles.p}>
             Whenever a ship moves, the enemy sees a splash in the quadrant where it ended up. They know something moved
-            there, but not what or exactly where.
+            there, but not what or exactly where. Moving is how you survive, and it is also how you give yourself away.
           </Text>
 
           <Text style={styles.h2}>Cooldowns & mobility</Text>
@@ -59,7 +88,10 @@ export function HomeScreen({ onStart }: Props) {
           </View>
 
           <Text style={styles.h2}>Winning</Text>
-          <Text style={styles.p}>Sink every enemy ship. Old shot markers fade – a miss yesterday can be a hit today.</Text>
+          <Text style={styles.p}>
+            Sink every enemy ship. Old shot markers fade – a miss yesterday can be a hit today. A wounded ship that sits
+            still is a dead ship.
+          </Text>
         </View>
       )}
     </Screen>
@@ -67,9 +99,20 @@ export function HomeScreen({ onStart }: Props) {
 }
 
 const styles = StyleSheet.create({
-  hero: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  hero: { alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
   title: { color: colors.accent, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
   subtitle: { color: colors.textDim, fontSize: 15, textAlign: 'center' },
+  resume: {
+    backgroundColor: colors.panel,
+    borderColor: colors.accent,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  resumeLabel: { color: colors.accent, fontWeight: '800', fontSize: 14 },
+  resumeMeta: { color: colors.textDim, fontSize: 13 },
+  blurb: { color: colors.textDim, fontSize: 13, marginTop: -spacing.xs },
   rules: {
     backgroundColor: colors.panel,
     borderColor: colors.panelBorder,

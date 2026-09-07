@@ -1,6 +1,19 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import App from '../App';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+jest.mock('expo-haptics', () => ({
+  selectionAsync: jest.fn().mockResolvedValue(undefined),
+  impactAsync: jest.fn().mockResolvedValue(undefined),
+  notificationAsync: jest.fn().mockResolvedValue(undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+}));
 
 jest.mock('react-native-safe-area-context', () => {
   const inset = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -12,7 +25,7 @@ jest.mock('react-native-safe-area-context', () => {
 
 function findByText(root: ReactTestInstance, text: string): ReactTestInstance {
   const matches = root.findAll(
-    (n) => n.type === 'Text' && n.children.length > 0 && n.children.map((c) => String(c)).join('').includes(text),
+    (n) => String(n.type) === 'Text' && n.children.length > 0 && n.children.map((c) => String(c)).join('').includes(text),
   );
   if (matches.length === 0) throw new Error(`No text node containing "${text}"`);
   return matches[0];
@@ -52,11 +65,19 @@ function pressCell(root: ReactTestInstance, label: string) {
 describe('App', () => {
   let renderer: ReactTestRenderer;
 
-  beforeEach(() => {
+  async function flush() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
     jest.useFakeTimers();
-    act(() => {
+    await act(async () => {
       renderer = create(<App />);
     });
+    await flush();
   });
 
   afterEach(() => {
@@ -141,5 +162,66 @@ describe('App', () => {
     pressText(root, 'Confirm: ahead 2');
     expect(hasText(root, 'Manoeuvre complete')).toBe(true);
     expect(hasText(root, 'End turn')).toBe(true);
+  });
+
+  test('difficulty can be chosen and describes itself', () => {
+    const root = renderer.root;
+    expect(hasText(root, 'Hunts methodically')).toBe(true);
+    pressText(root, 'Hard');
+    expect(hasText(root, 'Reads your splashes')).toBe(true);
+    pressText(root, 'Easy');
+    expect(hasText(root, 'rarely repositions')).toBe(true);
+  });
+
+  test('an interrupted game is autosaved and can be resumed from the menu', async () => {
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    await flush();
+
+    // The board state reached AsyncStorage.
+    const saved = await AsyncStorage.getItem('battleshiple:savegame:v1');
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved as string).state.players[0].shots).toHaveLength(1);
+
+    pressText(root, 'Quit to menu');
+    expect(hasText(root, 'Unfinished battle')).toBe(true);
+    expect(hasText(root, 'vs Computer')).toBe(true);
+
+    pressText(root, 'Resume game');
+    // Back in the same match, with the shot already on the board.
+    expect(hasText(root, 'B3:')).toBe(true);
+    expect(hasText(root, 'Unfinished battle')).toBe(false);
+  });
+
+  test('a saved game found at launch is offered, and can be discarded', async () => {
+    // Leave a save behind, then remount as if the app had been reopened.
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'C4');
+    pressText(root, 'FIRE at C4');
+    await flush();
+    act(() => {
+      renderer.unmount();
+    });
+
+    let fresh: ReactTestRenderer;
+    await act(async () => {
+      fresh = create(<App />);
+    });
+    await flush();
+    expect(hasText(fresh!.root, 'Unfinished battle')).toBe(true);
+    pressText(fresh!.root, 'Discard');
+    await flush();
+    expect(hasText(fresh!.root, 'Unfinished battle')).toBe(false);
+    expect(await AsyncStorage.getItem('battleshiple:savegame:v1')).toBeNull();
+    act(() => {
+      fresh!.unmount();
+    });
   });
 });

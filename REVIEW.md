@@ -2,6 +2,17 @@
 
 Two independent reviewers read every first-party file in this repository; a third then re-read each security or bug claim against the code and tried to refute it. Only claims that survived that check are listed as findings; the ones that did not are recorded at the end so they are not re-raised.
 
+## Status — what has been fixed
+
+These findings are now fixed on `claude/repo-review-security-baiyud`, each with a regression test:
+
+- **BUG-1**
+- **PLAY-1**
+
+The rest of this document is the review as written, and the fixed items are left in place so the reasoning behind each change stays with it.
+
+Repository hardening applied here as well: every GitHub Action is pinned to a commit rather than a floating tag, each workflow declares a least-privilege `permissions` block, and a Dependabot config, a licence and a security policy are in place.
+
 ## Summary
 
 Battleshiple is a polished single-repo Expo SDK 57 / RN 0.86 / React 19 mobile game: Battleship where you may manoeuvre one ship after every shot, which paints a quadrant splash on the opponent's board. The architecture is genuinely good — src/engine is pure, React-free, deterministic TypeScript (seeded mulberry32 PRNG) with real unit tests, and src/ui is a thin presentation layer over it; the README documents measured balance numbers and the icon set is generated procedurally by a stdlib-only Python script. Maturity is 'feature-complete v1.0.0, never shipped': three commits, no LICENSE/SECURITY.md/CHANGELOG, no lint tooling of any kind, no Dependabot, unpinned GitHub Actions, and app.json/eas.json are not actually wired to an EAS project (no extra.eas.projectId, no expo-updates, no appVersionSource). The headline recommendations are: (1) fix the resume deadlock — an AI-mode game saved while it is the computer's turn can never be resumed because scheduleAiTurn is only ever called from onEndTurn; (2) add ESLint + expo-doctor + a bundle-export check to CI and pin the actions; (3) close the accessibility gap — board cells announce only 'A1' with no state, tabs/fleet cards/setup chips have no accessible name, and the splash ripple loops forever with no reduced-motion escape; (4) commit the balance simulation harness the README quotes numbers from, since nothing in the repo reproduces them.

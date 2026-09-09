@@ -107,7 +107,9 @@ export default function App() {
     const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
     setSaved(null);
     setGame(g);
-    setScreen({ name: 'game' });
+    // A local board is never shown without a handoff in front of it: the admiral
+    // who just deployed is still holding the device.
+    setScreen(m === 'local' ? { name: 'handoff', player: g.current, reason: 'turn' } : { name: 'game' });
   }, []);
 
   const onSetupReady = useCallback(
@@ -158,6 +160,15 @@ export default function App() {
     [],
   );
 
+  // The computer moves whenever it is on the move. Driving this from the state
+  // rather than from onEndTurn also covers a match that was saved during the
+  // computer's think time and resumed later, which would otherwise never move on.
+  useEffect(() => {
+    if (screen.name !== 'game' || !game || game.phase === 'over') return;
+    if (aiBusy || !game.players[game.current].isAI) return;
+    scheduleAiTurn(game, difficulty);
+  }, [screen.name, game, aiBusy, difficulty, scheduleAiTurn]);
+
   const onFire = useCallback(
     (coord: Coord) => {
       if (!game) return;
@@ -188,12 +199,10 @@ export default function App() {
     if (!game) return;
     const next = endTurn(game);
     setGame(next);
-    if (next.mode === 'ai') {
-      scheduleAiTurn(next, difficulty);
-    } else {
+    if (next.mode === 'local') {
       setScreen({ name: 'handoff', player: next.current, reason: 'turn' });
     }
-  }, [game, difficulty, scheduleAiTurn]);
+  }, [game]);
 
   const goHome = useCallback(() => {
     if (aiTimer.current) clearTimeout(aiTimer.current);
@@ -215,7 +224,7 @@ export default function App() {
     setGame(saved.state);
     setSaved(null);
     setScreen(
-      saved.state.mode === 'local' && saved.state.phase === 'fire'
+      saved.state.mode === 'local'
         ? { name: 'handoff', player: saved.state.current, reason: 'turn' }
         : { name: 'game' },
     );

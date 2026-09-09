@@ -128,7 +128,12 @@ describe('App', () => {
     pressText(root, 'ready');
     pressText(root, 'Random');
     pressText(root, 'Start battle');
+    // Player 2 is still holding the device: the board only appears after a handoff.
+    expect(hasText(root, 'Pass the device to')).toBe(true);
+    expect(hasText(root, 'Choose a target')).toBe(false);
+    pressText(root, 'ready');
     expect(hasText(root, 'Player 1')).toBe(true);
+    expect(hasText(root, 'Choose a target')).toBe(true);
     pressCell(root, 'A1');
     pressText(root, 'FIRE at A1');
     pressText(root, 'Hold position');
@@ -195,6 +200,51 @@ describe('App', () => {
     // Back in the same match, with the shot already on the board.
     expect(hasText(root, 'B3:')).toBe(true);
     expect(hasText(root, 'Unfinished battle')).toBe(false);
+  });
+
+  test('a game quit during the computer\'s turn keeps playing when resumed', async () => {
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    pressText(root, 'Hold position');
+    expect(hasText(root, 'is taking their turn')).toBe(true);
+
+    // Quitting mid-think saves a state with the computer to move.
+    pressText(root, 'Quit to menu');
+    await flush();
+    expect(hasText(root, 'Unfinished battle')).toBe(true);
+
+    pressText(root, 'Resume game');
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+    // The computer takes the turn it owed instead of leaving a dead board.
+    expect(hasText(root, 'Admiral Byte fired at')).toBe(true);
+    expect(hasText(root, 'is taking their turn')).toBe(false);
+  });
+
+  test('a resumed pass & play game goes behind a handoff first', async () => {
+    const root = renderer.root;
+    pressText(root, 'Pass & Play');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressText(root, 'ready');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressText(root, 'ready');
+    pressCell(root, 'A1');
+    pressText(root, 'FIRE at A1');
+    await flush();
+
+    // Quitting mid-turn: the device may well change hands before the resume.
+    pressText(root, 'Quit to menu');
+    pressText(root, 'Resume game');
+    expect(hasText(root, 'Pass the device to')).toBe(true);
+    pressText(root, 'ready');
+    expect(hasText(root, 'A1:')).toBe(true);
   });
 
   test('a saved game found at launch is offered, and can be discarded', async () => {

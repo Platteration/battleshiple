@@ -82,6 +82,18 @@ export interface Splash {
 
 export type PlayerIndex = 0 | 1;
 
+/** What a player saw arrive on their own waters, captured when the shot landed. */
+export interface IncomingShot {
+  r: number;
+  c: number;
+  result: ShotOutcome;
+  /** Global half-turn counter when the shot landed. */
+  turn: number;
+  /** Class of the ship hit, if any. Known to the defender, never to the shooter. */
+  classId?: ShipClassId;
+  sunk: boolean;
+}
+
 export interface PlayerState {
   index: PlayerIndex;
   name: string;
@@ -91,6 +103,8 @@ export interface PlayerState {
   shots: ShotRecord[];
   /** Splashes visible to this player (caused by the opponent's manoeuvres). */
   splashes: Splash[];
+  /** The most recent shot this player received, as it was at the moment of impact. */
+  lastIncoming?: IncomingShot;
 }
 
 export type Phase = 'fire' | 'maneuver' | 'over';

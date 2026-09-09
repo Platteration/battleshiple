@@ -36,6 +36,8 @@ type Screen =
 
 const AI_NAME = 'Admiral Byte';
 const AI_DELAY_MS = 900;
+/** Beat between the winning shot landing and the summary screen. */
+const OVER_REVEAL_MS = 700;
 
 function playerNames(mode: GameMode): [string, string] {
   return mode === 'ai' ? ['You', AI_NAME] : ['Player 1', 'Player 2'];
@@ -107,7 +109,9 @@ export default function App() {
     const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
     setSaved(null);
     setGame(g);
-    setScreen({ name: 'game' });
+    // Player 2 deploys last, so the device is in their hands. Going straight to
+    // the board would show them player 1's fleet and hand them player 1's turn.
+    setScreen(m === 'local' ? { name: 'handoff', player: g.current, reason: 'turn' } : { name: 'game' });
   }, []);
 
   const onSetupReady = useCallback(
@@ -151,7 +155,9 @@ export default function App() {
         setGame(s);
         if (s.phase === 'over') {
           void clearGame();
-          setScreen({ name: 'over' });
+          // Same reveal beat the human's winning shot gets, so the killing blow
+          // is visible instead of teleporting straight to the summary.
+          overTimer.current = setTimeout(() => setScreen({ name: 'over' }), OVER_REVEAL_MS);
         }
       }, AI_DELAY_MS);
     },
@@ -169,7 +175,7 @@ export default function App() {
       if (res.state.phase === 'over') {
         void clearGame();
         // Let the winning hit land on screen before the summary.
-        overTimer.current = setTimeout(() => setScreen({ name: 'over' }), 700);
+        overTimer.current = setTimeout(() => setScreen({ name: 'over' }), OVER_REVEAL_MS);
       }
     },
     [game],
@@ -210,16 +216,24 @@ export default function App() {
 
   const onResume = useCallback(() => {
     if (!saved) return;
-    setMode(saved.state.mode);
+    const s = saved.state;
+    setMode(s.mode);
     setDifficulty(saved.difficulty);
-    setGame(saved.state);
+    setGame(s);
     setSaved(null);
-    setScreen(
-      saved.state.mode === 'local' && saved.state.phase === 'fire'
-        ? { name: 'handoff', player: saved.state.current, reason: 'turn' }
-        : { name: 'game' },
-    );
-  }, [saved]);
+    if (s.mode === 'local') {
+      // Whoever taps Resume may not be the player to move, and the board would
+      // show them the other admiral's fleet. Always hand off first.
+      setScreen({ name: 'handoff', player: s.current, reason: 'turn' });
+      return;
+    }
+    setScreen({ name: 'game' });
+    // A game saved during the computer's 900 ms pause has no timer behind it any
+    // more; without restarting it the human's board stays disabled forever.
+    if (s.phase !== 'over' && s.players[s.current].isAI) {
+      scheduleAiTurn(s, saved.difficulty);
+    }
+  }, [saved, scheduleAiTurn]);
 
   const onDiscardSave = useCallback(() => {
     setSaved(null);

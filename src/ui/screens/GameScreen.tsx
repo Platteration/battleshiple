@@ -43,15 +43,20 @@ function incomingReport(state: GameState, viewer: PlayerIndex): string[] {
   const me = state.players[viewer];
   const enemy = state.players[opponentOf(viewer)];
   const lines: string[] = [];
-  const last = enemy.shots[enemy.shots.length - 1];
-  if (last && last.turn === state.turn - 1) {
-    const label = coordLabel(last);
-    if (last.result === 'miss') lines.push(`${enemy.name} fired at ${label} and missed.`);
-    else {
-      const found = shipAt(me.ships, last);
-      const name = found ? SHIP_CLASSES[found.ship.classId].name : 'a ship';
-      if (found && isSunk(found.ship)) lines.push(`${enemy.name} fired at ${label} – your ${name} is sunk!`);
-      else lines.push(`${enemy.name} fired at ${label} and hit your ${name}!`);
+  // Read the snapshot taken when the shot landed. Deriving this from live hulls
+  // instead misreports the moment you evade with the ship that was just hit.
+  const hit = me.lastIncoming;
+  if (hit && hit.turn === state.turn - 1) {
+    const label = coordLabel(hit);
+    if (hit.result === 'miss') {
+      lines.push(`${enemy.name} fired at ${label} and missed.`);
+    } else {
+      const name = hit.classId ? SHIP_CLASSES[hit.classId].name : 'ship';
+      lines.push(
+        hit.sunk
+          ? `${enemy.name} fired at ${label} – your ${name} is sunk!`
+          : `${enemy.name} fired at ${label} and hit your ${name}!`,
+      );
     }
   }
   for (const sp of me.splashes) {

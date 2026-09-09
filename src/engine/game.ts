@@ -1,4 +1,4 @@
-import { SHIP_CLASSES, SPLASH_TTL } from './constants';
+import { SHIP_CLASSES, SPLASH_VISIBLE_TURNS } from './constants';
 import { coordLabel, inBounds, quadrantOf, QUADRANT_NAMES } from './geometry';
 import { applyManeuver, checkManeuver, describeManeuver } from './maneuver';
 import { cellsOf, fleetIsComplete, footprintIsFree, isSunk, shipAt } from './ships';
@@ -100,7 +100,19 @@ export function fire(state: GameState, coord: Coord): { state: GameState; result
     hits[segment] = true;
     const updated: Ship = { ...ship, hits };
     const ships = targetPlayer.ships.map((s) => (s.id === ship.id ? updated : s));
-    next = withPlayer(next, target, { ships });
+    next = withPlayer(next, target, {
+      ships,
+      // Snapshot what the defender saw now: their own ships move later this game,
+      // and re-deriving the banner from live hulls misreports it.
+      lastIncoming: {
+        r: coord.r,
+        c: coord.c,
+        result: 'hit',
+        turn: state.turn,
+        classId: ship.classId,
+        sunk: isSunk(updated),
+      },
+    });
     const sunkNow = !alreadyDamaged && isSunk(updated);
     result = {
       coord,
@@ -112,6 +124,9 @@ export function fire(state: GameState, coord: Coord): { state: GameState; result
     };
   } else {
     result = { coord, result: 'miss', alreadyDamaged: false, gameOver: false };
+    next = withPlayer(next, target, {
+      lastIncoming: { r: coord.r, c: coord.c, result: 'miss', turn: state.turn, sunk: false },
+    });
   }
 
   const shooterState = next.players[shooter];
@@ -178,8 +193,11 @@ export function endTurn(state: GameState): GameState {
     s.id !== state.maneuveredShipId && s.cooldown > 0 ? { ...s, cooldown: s.cooldown - 1 } : s,
   );
   const nextTurn = state.turn + 1;
-  // Splashes this player has already had a chance to see expire.
-  const splashes = player.splashes.filter((sp) => nextTurn - sp.turn < SPLASH_TTL - 1);
+  // Splashes this player has already had a chance to see expire. Turns alternate,
+  // so one observer turn is two half-turns of age.
+  const splashes = player.splashes.filter(
+    (sp) => nextTurn - sp.turn < 2 * SPLASH_VISIBLE_TURNS,
+  );
   let next = withPlayer(state, me, { ships, splashes });
   next = {
     ...next,

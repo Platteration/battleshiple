@@ -42,10 +42,17 @@ describe('storage', () => {
     expect(typeof loaded!.savedAt).toBe('number');
   });
 
-  test('finished games are cleared rather than saved', async () => {
-    const g = { ...game(), phase: 'over' as const, winner: 0 as const };
+  test('finishing a game clears the save that was already there', async () => {
+    // Save a real in-progress game first, otherwise this assertion holds
+    // vacuously whether or not saveGame clears anything.
+    let g = game();
+    g = endTurn(fire(g, { r: 8, c: 1 }).state);
     await saveGame(g, 'normal');
+    expect(await loadGame()).not.toBeNull();
+
+    await saveGame({ ...g, phase: 'over', winner: 0 }, 'normal');
     expect(await loadGame()).toBeNull();
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
   });
 
   test('clearGame removes the save', async () => {

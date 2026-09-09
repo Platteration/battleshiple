@@ -87,8 +87,11 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
     }
   }
 
+  // A placed ship's own heading is the truth; `heading` only steers the next drop.
+  const effectiveHeading = selectedShip ? selectedShip.heading : heading;
+
   function onRotate() {
-    const next = rotateCW(heading);
+    const next = rotateCW(effectiveHeading);
     if (selectedShip) {
       if (place(selected, selectedShip.bow, next)) setHeading(next);
     } else {
@@ -97,7 +100,11 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
   }
 
   function onRandom() {
-    setShips(randomFleet(defaultRng));
+    const fleet = randomFleet(defaultRng);
+    setShips(fleet);
+    // Keep the heading control in step with whatever the selected hull now is.
+    const sel = fleet.find((s) => s.classId === selected);
+    if (sel) setHeading(sel.heading);
     setMessage('Fleet deployed at random. Adjust anything you like.');
   }
 
@@ -138,7 +145,7 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
 
       <View style={styles.row}>
         <View style={styles.flex}>
-          <Button small variant="secondary" title={`Rotate ${headingArrow(heading)}`} onPress={onRotate} />
+          <Button small variant="secondary" title={`Rotate ${headingArrow(effectiveHeading)}`} onPress={onRotate} />
         </View>
         <View style={styles.flex}>
           <Button small variant="secondary" title="Random" onPress={onRandom} />

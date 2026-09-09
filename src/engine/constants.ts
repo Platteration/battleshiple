@@ -16,5 +16,12 @@ export const SHIP_CLASSES: Record<ShipClassId, ShipClass> = {
 
 export const FLEET: ShipClassId[] = ['carrier', 'battleship', 'destroyer', 'submarine', 'patrol'];
 
-/** Number of half-turns a splash stays visible to the observing player. */
-export const SPLASH_TTL = 2;
+/**
+ * How many of the observing player's own turns a splash stays visible.
+ *
+ * Expressed in whole observer turns on purpose. Expiry is only ever evaluated at
+ * the observer's own endTurn, i.e. at even splash ages, so a knob counting raw
+ * half-turns would have had two values for every distinct behaviour and half of
+ * them would have done nothing.
+ */
+export const SPLASH_VISIBLE_TURNS = 1;

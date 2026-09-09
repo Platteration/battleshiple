@@ -17,8 +17,13 @@ export const colors = {
   hit: '#ff4d4d',
   sunk: '#3a3f47',
   selected: '#ffd166',
-  previewOk: 'rgba(61, 220, 151, 0.55)',
-  previewBad: 'rgba(255, 77, 77, 0.55)',
+  // Cyan, not green: green collided with the Destroyer's hull colour, so a
+  // manoeuvre preview was easy to read as another ship. Splashes never render
+  // on the fleet board, so cyan is unambiguous there.
+  previewOk: 'rgba(155, 224, 255, 0.50)',
+  previewOkBorder: '#9be0ff',
+  previewBad: 'rgba(255, 77, 77, 0.50)',
+  previewBadBorder: '#ff4d4d',
   splash: '#9be0ff',
 };
 

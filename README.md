@@ -114,6 +114,16 @@ npx expo start
 Scan the QR code with **Expo Go** on iOS or Android, or press `i` / `a` to open
 a simulator / emulator.
 
+It also runs in a browser via react-native-web:
+
+```bash
+npm run web
+```
+
+Web is a development and review convenience, not a target platform — haptics are
+inert there. It exists because it is the only way to *see* the UI without a
+simulator, which is how several layout and copy defects were caught.
+
 ### Native builds
 
 The project uses [EAS Build](https://docs.expo.dev/build/introduction/):
@@ -128,7 +138,34 @@ eas build -p android --profile preview
 
 ```bash
 npm run typecheck   # TypeScript
-npm test            # Jest (engine unit tests + UI smoke tests)
+npm test            # Jest: 55 tests, engine + UI
+```
+
+### Seeing the UI
+
+There is no simulator in most automated environments, so `tools/screenshots.js`
+drives the web build in Chromium and captures each screen, failing on any console
+error. Playwright is deliberately not a repo dependency, to keep CI from pulling
+browser binaries.
+
+```bash
+npm i -D playwright
+npx expo export --platform web --output-dir /tmp/web
+(cd /tmp/web && python3 -m http.server 8099 &)
+node tools/screenshots.js /tmp/shots
+```
+
+This found a manoeuvre preview tinted the same green as the Destroyer's hull, a
+Confirm button that fell below the fold on a 390x844 phone, and a log line that
+read "You's Patrol Boat" — none of which any unit test would have noticed.
+
+### Regenerating the icons
+
+`tools/generate-icons.py` renders every icon slot from signed distance fields and
+writes the PNGs directly, with no image-library dependency:
+
+```bash
+python3 tools/generate-icons.py assets
 ```
 
 ### Project layout

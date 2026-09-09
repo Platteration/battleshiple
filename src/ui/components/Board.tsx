@@ -76,10 +76,18 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
   }
 
   if (cell.preview) {
+    const ok = cell.preview === 'ok';
     nodes.push(
       <View
         key="preview"
-        style={[StyleSheet.absoluteFill, { backgroundColor: cell.preview === 'ok' ? colors.previewOk : colors.previewBad }]}
+        style={[
+          StyleSheet.absoluteFill,
+          styles.preview,
+          {
+            backgroundColor: ok ? colors.previewOk : colors.previewBad,
+            borderColor: ok ? colors.previewOkBorder : colors.previewBadBorder,
+          },
+        ]}
       />,
     );
   }
@@ -149,6 +157,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   selectedShip: { borderWidth: 2, borderColor: colors.selected },
+  preview: { borderWidth: 2, borderStyle: 'dashed' },
   bow: { color: 'rgba(0,0,0,0.65)', fontWeight: '900' },
   hitMark: { color: colors.hit, fontWeight: '900', position: 'absolute' },
   missDot: { backgroundColor: colors.miss },

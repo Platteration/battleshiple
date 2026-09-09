@@ -73,6 +73,19 @@ export function ManeuverPanel({ ship, fleet, pending, onPick, onConfirm, onCance
         </Text>
         {blockedReason ? <Text style={styles.blocked}>{blockedReason}</Text> : null}
       </View>
+      {/* Kept directly under the header: at the bottom of the panel this fell
+          below the fold on a 390x844 phone, so the preview could not be committed
+          without scrolling. */}
+      {pending ? (
+        <View style={styles.row}>
+          <View style={styles.flex}>
+            <Button small variant="ghost" title="Cancel" onPress={onCancel} />
+          </View>
+          <View style={[styles.flex, { flex: 2 }]}>
+            <Button small title={`Confirm: ${describeManeuver(pending)}`} onPress={onConfirm} />
+          </View>
+        </View>
+      ) : null}
       {rows.map((row, i) => (
         <View key={i} style={styles.row}>
           {row.map((ctl) => {
@@ -95,16 +108,7 @@ export function ManeuverPanel({ ship, fleet, pending, onPick, onConfirm, onCance
           })}
         </View>
       ))}
-      {pending ? (
-        <View style={styles.row}>
-          <View style={styles.flex}>
-            <Button small variant="ghost" title="Cancel" onPress={onCancel} />
-          </View>
-          <View style={[styles.flex, { flex: 2 }]}>
-            <Button small title={`Confirm: ${describeManeuver(pending)}`} onPress={onConfirm} />
-          </View>
-        </View>
-      ) : (
+      {pending ? null : (
         <Text style={styles.hint}>Turns pivot on the bow. Every move makes a splash on the enemy's screen.</Text>
       )}
     </View>

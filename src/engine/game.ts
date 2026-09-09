@@ -176,7 +176,10 @@ export function maneuver(state: GameState, shipId: string, m: Maneuver): GameSta
   next = { ...next, maneuveredShipId: shipId };
   next = log(
     next,
-    `${player.name}'s ${SHIP_CLASSES[ship.classId].name} ${describeManeuver(m)} (splash in the ${QUADRANT_NAMES[quadrant]}).`,
+    // Phrased without a possessive: the human player is literally called "You",
+    // which made the old wording read "You's Patrol Boat".
+    `${player.name} moved the ${SHIP_CLASSES[ship.classId].name} ${describeManeuver(m)} ` +
+      `(splash in the ${QUADRANT_NAMES[quadrant]}).`,
     'move',
   );
   return next;

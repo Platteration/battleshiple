@@ -243,4 +243,34 @@ describe('splash placement and incoming-shot snapshots', () => {
     expect(sink.result.sunk).toBeDefined();
     expect(sink.state.players[1].lastIncoming).toMatchObject({ classId: 'patrol', sunk: true });
   });
+
+  test('the manoeuvre log is grammatical for every player name and every move', () => {
+    const kinds = [
+      { m: { kind: 'ahead' as const, distance: 2 }, text: 'ahead 2' },
+      { m: { kind: 'astern' as const, distance: 1 }, text: 'astern 1' },
+      { m: { kind: 'port' as const }, text: 'one cell to port' },
+      { m: { kind: 'starboard' as const }, text: 'one cell to starboard' },
+      { m: { kind: 'rotateCW' as const }, text: '90\u00b0 clockwise' },
+      { m: { kind: 'rotateCCW' as const }, text: '90\u00b0 counter-clockwise' },
+    ];
+    // The destroyer sits in open water so all six manoeuvres are legal.
+    const openFleet = (): Ship[] => [
+      makeShip('carrier', { r: 0, c: 4 }, 'E'),
+      makeShip('battleship', { r: 2, c: 3 }, 'E'),
+      makeShip('destroyer', { r: 5, c: 5 }, 'E'),
+      makeShip('submarine', { r: 8, c: 2 }, 'E'),
+      makeShip('patrol', { r: 9, c: 9 }, 'E'),
+    ];
+    for (const { m, text } of kinds) {
+      // "You" is the human's actual name in vs-Computer mode, so a possessive
+      // here produced "You's Patrol Boat".
+      let g = createGame({ mode: 'ai', names: ['You', 'AI'], fleets: [openFleet(), fleetA()], aiPlayer: 1 });
+      g = fire(g, { r: 9, c: 9 }).state;
+      g = maneuver(g, 'destroyer', m);
+      const entry = g.log.filter((e) => e.kind === 'move').pop()!;
+      expect(entry.text).toContain(`You moved the Destroyer ${text}`);
+      expect(entry.text).not.toContain("You's");
+      expect(entry.text).toMatch(/\(splash in the (north|south)-(east|west)\)\.$/);
+    }
+  });
 });

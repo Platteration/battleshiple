@@ -91,6 +91,10 @@ export function availableManeuvers(ship: Ship, fleet: readonly Ship[]): Maneuver
   return out;
 }
 
+/**
+ * How a manoeuvre reads as the object of "moved the <ship> ...", so every kind
+ * composes into one grammatical sentence for any player name.
+ */
 export function describeManeuver(m: Maneuver): string {
   const d = m.distance ?? 1;
   switch (m.kind) {
@@ -99,12 +103,12 @@ export function describeManeuver(m: Maneuver): string {
     case 'astern':
       return `astern ${d}`;
     case 'port':
-      return 'shifted to port';
+      return 'one cell to port';
     case 'starboard':
-      return 'shifted to starboard';
+      return 'one cell to starboard';
     case 'rotateCW':
-      return 'turned clockwise';
+      return '90° clockwise';
     case 'rotateCCW':
-      return 'turned counter-clockwise';
+      return '90° counter-clockwise';
   }
 }

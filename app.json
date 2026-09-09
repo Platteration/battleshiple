@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#061a2b",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#061a2b"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.platteration.battleshiple"
@@ -27,7 +22,19 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
-    }
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#061a2b"
+        }
+      ]
+    ]
   }
 }

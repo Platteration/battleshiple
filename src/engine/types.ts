@@ -113,12 +113,39 @@ export type GameMode = 'ai' | 'local';
 
 export type LogKind = 'shot' | 'move' | 'system';
 
+/** Where a ship sat: enough to place it on a board. */
+export interface Pose {
+  bow: Coord;
+  heading: Heading;
+}
+
+/**
+ * Structured record of a manoeuvre, carried alongside the prose `text`.
+ *
+ * The replay is reconstructed from this, never by parsing `text` — that string
+ * is player-facing and will be localised. It is subject to exactly the same
+ * secrecy rule as the entry that holds it: `visibleLog` withholds move entries
+ * from anyone but the mover, so this adds no new leak surface.
+ */
+export interface MoveRecord {
+  shipId: string;
+  classId: ShipClassId;
+  kind: ManeuverKind;
+  distance?: number;
+  from: Pose;
+  to: Pose;
+  /** Quadrant the opponent saw splash. */
+  quadrant: Quadrant;
+}
+
 export interface LogEntry {
   turn: number;
   by: PlayerIndex;
   kind: LogKind;
   /** Move entries reveal which ship moved and how – only the mover may see them. */
   text: string;
+  /** Present on 'move' entries. Machine-readable counterpart of `text`. */
+  move?: MoveRecord;
 }
 
 export interface GameState {
@@ -134,4 +161,12 @@ export interface GameState {
   /** Ship the current player has already moved this turn (if any). */
   maneuveredShipId?: string;
   log: LogEntry[];
+  /**
+   * Both fleets exactly as deployed, before a shot was fired.
+   *
+   * A replay needs a starting position; only current positions survive in
+   * `players`, and inverting every move backwards from the end is possible but
+   * fragile. Optional so that games saved before this existed still load.
+   */
+  opening?: [Ship[], Ship[]];
 }

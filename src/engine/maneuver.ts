@@ -1,12 +1,9 @@
 import { SHIP_CLASSES } from './constants';
 import { HEADING_VECTORS, add, rotateCCW, rotateCW } from './geometry';
 import { cellsOf, damageOf, footprintIsFree, isSunk } from './ships';
-import { Coord, Heading, Maneuver, ManeuverKind, Ship } from './types';
+import { Coord, Maneuver, ManeuverKind, Pose, Ship } from './types';
 
-export interface Pose {
-  bow: Coord;
-  heading: Heading;
-}
+export type { Pose };
 
 /** Compute where the ship would end up after a manoeuvre (no validation). */
 export function projectManeuver(ship: Ship, m: Maneuver): Pose {

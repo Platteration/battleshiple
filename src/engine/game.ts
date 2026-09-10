@@ -9,6 +9,7 @@ import {
   LogEntry,
   LogKind,
   Maneuver,
+  MoveRecord,
   PlayerIndex,
   PlayerState,
   Ship,
@@ -41,14 +42,22 @@ export function createGame(opts: CreateGameOptions): GameState {
     shots: [],
     splashes: [],
   });
+  const players: [PlayerState, PlayerState] = [mk(0), mk(1)];
   return {
     mode: opts.mode,
-    players: [mk(0), mk(1)],
+    players,
     current: 0,
     phase: 'fire',
     turn: 0,
     log: [],
+    // Snapshot the deployed fleets for the replay. Deep-copied from the players
+    // rather than from opts, so a caller mutating its own array cannot corrupt it.
+    opening: [cloneFleet(players[0].ships), cloneFleet(players[1].ships)],
   };
+}
+
+function cloneFleet(ships: readonly Ship[]): Ship[] {
+  return ships.map((s) => ({ ...s, bow: { ...s.bow }, hits: [...s.hits] }));
 }
 
 export function opponentOf(p: PlayerIndex): PlayerIndex {
@@ -69,8 +78,8 @@ function withPlayer(state: GameState, index: PlayerIndex, patch: Partial<PlayerS
   return { ...state, players };
 }
 
-function log(state: GameState, text: string, kind: LogKind = 'system'): GameState {
-  return { ...state, log: [...state.log, { turn: state.turn, by: state.current, kind, text }] };
+function log(state: GameState, text: string, kind: LogKind = 'system', move?: MoveRecord): GameState {
+  return { ...state, log: [...state.log, { turn: state.turn, by: state.current, kind, text, move }] };
 }
 
 /** Log entries a given player is allowed to read (the opponent's moves stay hidden). */
@@ -181,6 +190,15 @@ export function maneuver(state: GameState, shipId: string, m: Maneuver): GameSta
     `${player.name} moved the ${SHIP_CLASSES[ship.classId].name} ${describeManeuver(m)} ` +
       `(splash in the ${QUADRANT_NAMES[quadrant]}).`,
     'move',
+    {
+      shipId,
+      classId: ship.classId,
+      kind: m.kind,
+      distance: m.distance,
+      from: { bow: { ...ship.bow }, heading: ship.heading },
+      to: { bow: { ...moved.bow }, heading: moved.heading },
+      quadrant,
+    },
   );
   return next;
 }

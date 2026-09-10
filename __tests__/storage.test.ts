@@ -76,8 +76,53 @@ describe('storage', () => {
   });
 
   test('a storage failure never propagates to the caller', async () => {
-    const spy = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk full'));
-    await expect(saveGame(game(), 'normal')).resolves.toBeUndefined();
-    spy.mockRestore();
+    // `setItem` is already a jest.fn from the module mock, so spying on it and
+    // calling mockRestore leaves behind an inert stub rather than the original —
+    // which silently breaks writes for every test that runs after this one.
+    // Swap the implementation and put the real one back by hand instead.
+    const real = AsyncStorage.setItem;
+    AsyncStorage.setItem = jest.fn().mockRejectedValueOnce(new Error('disk full'));
+    try {
+      await expect(saveGame(game(), 'normal')).resolves.toBeUndefined();
+    } finally {
+      AsyncStorage.setItem = real;
+    }
+    // Prove the store still works afterwards, so the next test can rely on it.
+    await AsyncStorage.setItem(KEY, 'probe');
+    expect(await AsyncStorage.getItem(KEY)).toBe('probe');
+  });
+});
+
+describe('backward compatibility', () => {
+  beforeEach(async () => {
+    jest.restoreAllMocks();
+    await AsyncStorage.clear();
+  });
+
+  test('a save written before the replay fields existed still loads and plays', async () => {
+    // `opening` and `LogEntry.move` were added after v1 saves were already in
+    // the wild. They are optional precisely so those saves keep working; such a
+    // game simply has no replay.
+    let g = game();
+    g = endTurn(fire(g, { r: 8, c: 1 }).state);
+    const legacy = JSON.parse(JSON.stringify(g)) as GameState & { opening?: unknown };
+    delete legacy.opening;
+    legacy.log = legacy.log.map((e) => {
+      const { move, ...rest } = e as typeof e & { move?: unknown };
+      return rest as typeof e;
+    });
+
+    await AsyncStorage.setItem(
+      KEY,
+      JSON.stringify({ version: 1, savedAt: 1, difficulty: 'normal', state: legacy }),
+    );
+    const loaded = await loadGame();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.state.opening).toBeUndefined();
+    expect(loaded!.state.players[1].ships.find((s) => s.id === 'patrol')?.hits).toEqual([true, false]);
+
+    // And the engine still advances it.
+    const resumed = fire(loaded!.state, { r: 9, c: 9 });
+    expect(resumed.result.result).toBe('miss');
   });
 });

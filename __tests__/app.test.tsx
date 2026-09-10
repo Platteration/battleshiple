@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
+import { Alert, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import App from '../App';
+import { ErrorBoundary } from '../src/ui/components/ErrorBoundary';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -245,6 +247,82 @@ describe('App', () => {
     expect(hasText(root, 'Pass the device to')).toBe(true);
     pressText(root, 'ready');
     expect(hasText(root, 'A1:')).toBe(true);
+  });
+
+  test('starting a new battle asks first, because it will spend the saved one', async () => {
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    await flush();
+    pressText(root, 'Quit to menu');
+    expect(hasText(root, 'Unfinished battle')).toBe(true);
+
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      pressText(root, 'Pass & Play');
+      expect(alert).toHaveBeenCalled();
+      // Nothing has happened yet: still on the menu, saved battle still offered.
+      expect(hasText(root, 'deploy your fleet')).toBe(false);
+      expect(hasText(root, 'Unfinished battle')).toBe(true);
+
+      const buttons = (alert.mock.calls[0][2] ?? []) as { text: string; onPress?: () => void }[];
+      expect(buttons.map((b) => b.text)).toContain('Cancel');
+      const confirm = buttons.find((b) => b.text === 'Discard and start');
+      expect(confirm?.onPress).toBeDefined();
+      act(() => {
+        confirm!.onPress!();
+      });
+      expect(hasText(root, 'deploy your fleet')).toBe(true);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  test('with nothing saved, a new battle starts without a prompt', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      pressText(renderer.root, 'Play vs Computer');
+      expect(alert).not.toHaveBeenCalled();
+      expect(hasText(renderer.root, 'deploy your fleet')).toBe(true);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  test('a screen that throws while rendering offers a way back instead of dying', () => {
+    let explode = true;
+    const Maybe = (): React.ReactElement => {
+      if (explode) throw new Error('could not draw the battle');
+      return <Text>calm waters</Text>;
+    };
+    const onReset = jest.fn(() => {
+      explode = false;
+    });
+    // React logs the caught error itself; the test does not need to see it.
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+    let boundary: ReactTestRenderer;
+    try {
+      act(() => {
+        boundary = create(
+          <ErrorBoundary onReset={onReset}>
+            <Maybe />
+          </ErrorBoundary>,
+        );
+      });
+      expect(hasText(boundary!.root, 'Signal lost')).toBe(true);
+      pressText(boundary!.root, 'Back to the menu');
+      expect(onReset).toHaveBeenCalledTimes(1);
+      // The boundary clears its own error, so the recovered tree renders again.
+      expect(hasText(boundary!.root, 'calm waters')).toBe(true);
+    } finally {
+      quiet.mockRestore();
+      act(() => {
+        boundary!.unmount();
+      });
+    }
   });
 
   test('a saved game found at launch is offered, and can be discarded', async () => {

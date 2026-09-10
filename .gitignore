@@ -31,7 +31,10 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+# `.env*.local` alone leaves a plain `.env` tracked, which is exactly where
+# EAS or store credentials would land the day this app needs any.
+.env*
+!.env.example
 
 # typescript
 *.tsbuildinfo

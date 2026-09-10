@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   Coord,
@@ -19,7 +19,8 @@ import {
   maneuver,
   randomFleet,
 } from './src/engine';
-import { clearGame, loadGame, saveGame } from './src/storage';
+import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
+import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { feedback } from './src/ui/feedback';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
@@ -49,6 +50,12 @@ function describeSave(state: GameState, savedAt: number): string {
   return `${mode} · turn ${turn} · saved ${when}`;
 }
 
+type ResumeOffer = { state: GameState; difficulty: Difficulty; label: string };
+
+function toOffer(s: SavedGame): ResumeOffer {
+  return { state: s.state, difficulty: s.difficulty, label: describeSave(s.state, s.savedAt) };
+}
+
 export default function App() {
   const [mode, setMode] = useState<GameMode>('ai');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
@@ -56,7 +63,7 @@ export default function App() {
   const [fleets, setFleets] = useState<[Ship[] | null, Ship[] | null]>([null, null]);
   const [game, setGame] = useState<GameState | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
-  const [saved, setSaved] = useState<{ state: GameState; difficulty: Difficulty; label: string } | null>(null);
+  const [saved, setSaved] = useState<ResumeOffer | null>(null);
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,9 +71,7 @@ export default function App() {
   useEffect(() => {
     let alive = true;
     void loadGame().then((s) => {
-      if (alive && s) {
-        setSaved({ state: s.state, difficulty: s.difficulty, label: describeSave(s.state, s.savedAt) });
-      }
+      if (alive && s) setSaved(toOffer(s));
     });
     return () => {
       alive = false;
@@ -96,12 +101,29 @@ export default function App() {
 
   const names = playerNames(mode);
 
-  const startSetup = useCallback((m: GameMode) => {
-    setMode(m);
-    setFleets([null, null]);
-    setGame(null);
-    setScreen({ name: 'setup', player: 0 });
-  }, []);
+  const startSetup = useCallback(
+    (m: GameMode) => {
+      const go = () => {
+        setMode(m);
+        setFleets([null, null]);
+        setGame(null);
+        setScreen({ name: 'setup', player: 0 });
+      };
+      // The start buttons sit directly under the offer to resume, and the first
+      // autosave of the new match overwrites the saved one. Games here run for
+      // eighty turns a side, so ask before spending someone's mis-tap on one.
+      // The save itself is left alone until then: backing out of setup keeps it.
+      if (saved) {
+        Alert.alert('Start a new battle?', 'The unfinished battle will be discarded once the new fleets are deployed.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Discard and start', style: 'destructive', onPress: go },
+        ]);
+        return;
+      }
+      go();
+    },
+    [saved],
+  );
 
   const beginGame = useCallback((f0: Ship[], f1: Ship[], m: GameMode) => {
     const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
@@ -217,6 +239,21 @@ export default function App() {
     setScreen({ name: 'home' });
   }, [game, difficulty]);
 
+  /**
+   * Recover from a render that threw. The state in hand is what failed to draw,
+   * so it is dropped rather than saved back, and the offer is rebuilt from disk
+   * through `loadGame` – which validates and discards a save it cannot read, so
+   * a crash on resume cannot repeat forever.
+   */
+  const recoverToHome = useCallback(() => {
+    if (aiTimer.current) clearTimeout(aiTimer.current);
+    if (overTimer.current) clearTimeout(overTimer.current);
+    setAiBusy(false);
+    setGame(null);
+    setScreen({ name: 'home' });
+    void loadGame().then((s) => setSaved(s ? toOffer(s) : null));
+  }, []);
+
   const onResume = useCallback(() => {
     if (!saved) return;
     setMode(saved.state.mode);
@@ -294,7 +331,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      {content}
+      <ErrorBoundary onReset={recoverToHome}>{content}</ErrorBoundary>
     </SafeAreaProvider>
   );
 }

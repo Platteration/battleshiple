@@ -73,34 +73,53 @@ the menu offers to resume or discard it. Finishing a game clears the save.
 
 ## Balance
 
-Numbers from simulated games in `npm test` territory, 300-600 games per row.
-They are the reason the design is shaped the way it is.
+Every number here comes from `npm run sim`, 500 games per row at base seed 1.
+Reproduce them with:
 
-Manoeuvring is not optional. A fleet that never moves almost never wins:
+```bash
+npm run sim -- --games 500          # everything below
+npm run sim -- --suite mobility     # just one section
+```
 
-| Player A's policy | A's win rate vs a normal-moving opponent |
-|-------------------|------------------------------------------|
-| Never moves       | 2.8% (easy and normal), 10.8% (hard)     |
-| Manoeuvres        | ~50% at every level                      |
+They are the reason the design is shaped the way it is. Re-run them after any
+rule change; the engine is pure, so measuring beats arguing.
+
+**Manoeuvring is not optional.** A fleet that never moves almost never wins:
+
+| Skill  | A never moves | A manoeuvres | Gap      |
+|--------|---------------|--------------|----------|
+| Easy   | 1.2%          | 52.2%        | 51.0 pts |
+| Normal | 0.6%          | 51.2%        | 50.6 pts |
+| Hard   | 11.4%         | 50.8%        | 39.4 pts |
 
 Evading with a damaged ship is the single most valuable skill, because a hit
 segment stays hit and a stationary wounded hull is simply finished off. Staying
-put does better against a hard opponent precisely because that opponent reads
-the splash you would have given away.
+put does markedly better against a hard opponent — the only one that reads
+splashes — precisely because that opponent can use the splash you did not give
+away. That is the trade the game is built on, and it is worth ~12 points.
 
-Skill levels separate as intended, measured head to head:
+**Skill levels separate**, measured head to head:
 
-| Matchup          | Win rate for the first named |
-|------------------|------------------------------|
-| Easy vs Hard     | 11%                          |
-| Normal vs Hard   | 29%                          |
-| Hard vs Hard     | 51%                          |
+| Matchup        | Win rate for the first named |
+|----------------|------------------------------|
+| Easy vs Hard   | 13.4%                        |
+| Normal vs Hard | 28.6%                        |
+| Easy vs Normal | 24.4%                        |
+| Hard vs Hard   | 50.8% (sanity check)         |
 
-Games are long: a median of 80 turns per side at hard and 108 at normal, versus
-roughly 45 for classic Battleship. Moving targets defeat the usual hunt-and-sink
-shortcut, and the cost is spread evenly across the match at about 15 shots per
-kill rather than concentrated in a slow endgame. Shrinking the board or the
-fleet would be the lever to pull if that proves too long in play.
+**Games are long**, in turns per side:
+
+| Matchup          | Median | p90 | Max |
+|------------------|--------|-----|-----|
+| Easy vs Easy     | 151    | 217 | 305 |
+| Normal vs Normal | 113    | 160 | 233 |
+| Hard vs Hard     | 83     | 118 | 184 |
+
+Classic Battleship is roughly 45. Moving targets defeat the usual hunt-and-sink
+shortcut. There is also a real endgame drag: the last hull costs **1.5x** the
+median of the earlier kills at both normal and hard, because a small, mobile,
+undamaged ship on an open board is the hardest thing in the game to corner.
+Shrinking the board, or raising the size of the *smallest* ship, are the levers.
 
 ## Running the app
 

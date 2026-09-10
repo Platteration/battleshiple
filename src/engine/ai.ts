@@ -1,7 +1,7 @@
 import { BOARD_SIZE } from './constants';
 import { coordKey, inBounds, quadrantOf } from './geometry';
 import { availableManeuvers, isReady } from './maneuver';
-import { pick, Rng } from './random';
+import { pick, Rng, shuffled } from './random';
 import { cellsOf, damageOf, isSunk } from './ships';
 import { Coord, GameState, Maneuver, PlayerIndex, Quadrant, Ship, ShotRecord } from './types';
 import { opponentOf } from './game';
@@ -240,7 +240,7 @@ export function aiChooseManeuver(
   else if (rng() < profile.restlessness) pool = ready;
   if (pool.length === 0) return null;
 
-  const order = [...pool].sort(() => rng() - 0.5);
+  const order = shuffled(rng, pool);
   for (const ship of order) {
     const options = availableManeuvers(ship, me.ships);
     if (options.length === 0) continue;

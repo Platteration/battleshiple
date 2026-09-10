@@ -20,4 +20,27 @@ export function pick<T>(rng: Rng, items: readonly T[]): T {
   return items[randomInt(rng, items.length)];
 }
 
+/**
+ * Fisher-Yates shuffle.
+ *
+ * `[...xs].sort(() => rng() - 0.5)` is the tempting one-liner and it is wrong
+ * twice over: the comparator is non-transitive, so the permutation is biased,
+ * and `sort` calls it an implementation-defined number of times. V8 and Hermes
+ * therefore draw a different COUNT of values from `rng`, and every subsequent
+ * draw diverges from the same seed — which breaks seeded replays, the daily
+ * puzzle, and any server-side re-derivation of a turn.
+ *
+ * This consumes exactly `items.length - 1` values, on every engine.
+ */
+export function shuffled<T>(rng: Rng, items: readonly T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomInt(rng, i + 1);
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
+}
+
 export const defaultRng: Rng = () => Math.random();

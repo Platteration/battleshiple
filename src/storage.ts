@@ -2,10 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AI_PROFILES,
   Difficulty,
+  FLEET,
   GameState,
   HEADINGS,
+  PlayerState,
   QUADRANT_NAMES,
   SHIP_CLASSES,
+  SPLASH_TTL,
   Ship,
   ShipClassId,
   cellsOf,
@@ -130,6 +133,25 @@ function isLastShot(v: unknown): boolean {
   );
 }
 
+/**
+ * How many of each, not just what shape each is. A save can be correct element
+ * by element and still unplayable because of the count: the AI pairs up every
+ * recent hit against every other one, so a shot history tens of thousands long
+ * hangs the app on Resume rather than merely slowing it down, and the game
+ * screen draws a line per log entry and per splash. Play cannot come close –
+ * one shot and at most one splash per half-turn, and a match is decided in
+ * about a hundred – so these are ceilings on the absurd rather than limits on
+ * anything real, and a save above one is discarded like any other we cannot
+ * read.
+ */
+const MAX_HALF_TURNS = 2000;
+/** One shot per half-turn of the player's own. */
+const MAX_SHOTS = MAX_HALF_TURNS;
+/** A shot line, a move line and the odd system line per half-turn. */
+const MAX_LOG = MAX_HALF_TURNS * 4;
+/** The opponent's latest manoeuvre; the rest expire at the end of the turn. */
+const MAX_SPLASHES = SPLASH_TTL * 2;
+
 function isPlayer(v: unknown, index: 0 | 1): boolean {
   return (
     isRecord(v) &&
@@ -138,10 +160,13 @@ function isPlayer(v: unknown, index: 0 | 1): boolean {
     typeof v.isAI === 'boolean' &&
     Array.isArray(v.ships) &&
     v.ships.length > 0 &&
+    v.ships.length <= FLEET.length &&
     v.ships.every(isShip) &&
     Array.isArray(v.shots) &&
+    v.shots.length <= MAX_SHOTS &&
     v.shots.every(isShot) &&
     Array.isArray(v.splashes) &&
+    v.splashes.length <= MAX_SPLASHES &&
     v.splashes.every(isSplash)
   );
 }
@@ -155,9 +180,19 @@ function isGameState(v: unknown): boolean {
   if (!isCount(v.turn)) return false;
   if (v.maneuveredShipId !== undefined && typeof v.maneuveredShipId !== 'string') return false;
   if (v.lastShot !== undefined && !isLastShot(v.lastShot)) return false;
-  if (!Array.isArray(v.log) || !v.log.every(isLogEntry)) return false;
+  if (!Array.isArray(v.log) || v.log.length > MAX_LOG || !v.log.every(isLogEntry)) return false;
   if (!Array.isArray(v.players) || v.players.length !== 2) return false;
-  return isPlayer(v.players[0], 0) && isPlayer(v.players[1], 1);
+  if (!isPlayer(v.players[0], 0) || !isPlayer(v.players[1], 1)) return false;
+  // Fields that are only wrong in combination. Each of these pairs is valid
+  // field by field and is a pair the app itself can never write, because the
+  // computer fires, manoeuvres and ends its turn in one synchronous block.
+  const players = v.players as [PlayerState, PlayerState];
+  // A local match has no computer in it: an AI there would play a human's turn.
+  if (v.mode === 'local' && (players[0].isAI || players[1].isAI)) return false;
+  // The computer's turn opens with fire(), which throws outside the firing
+  // phase – and it throws inside a timer, where no error boundary can catch it.
+  if (players[v.current as 0 | 1].isAI && v.phase !== 'fire') return false;
+  return true;
 }
 
 function isValid(value: unknown): value is SavedGame {

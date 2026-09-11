@@ -153,6 +153,22 @@ export default function App() {
     [screen, mode, fleets, beginGame],
   );
 
+  /**
+   * Give up on a turn that cannot be played – a screen that threw while drawing,
+   * or the computer's own timer below. The state in hand is what failed, so it is
+   * dropped rather than saved back, and the offer is rebuilt from disk through
+   * `loadGame` – which validates and discards a save it cannot read, so a crash
+   * on resume cannot repeat forever.
+   */
+  const recoverToHome = useCallback(() => {
+    if (aiTimer.current) clearTimeout(aiTimer.current);
+    if (overTimer.current) clearTimeout(overTimer.current);
+    setAiBusy(false);
+    setGame(null);
+    setScreen({ name: 'home' });
+    void loadGame().then((s) => setSaved(s ? toOffer(s) : null));
+  }, []);
+
   /** Play the computer's whole turn after a pause, then hand control back. */
   const scheduleAiTurn = useCallback(
     (g: GameState, level: Difficulty) => {
@@ -169,6 +185,12 @@ export default function App() {
             if (mv) s = maneuver(s, mv.shipId, mv.maneuver);
             s = endTurn(s);
           }
+        } catch {
+          // A throw here is on the timer's own stack, where no error boundary can
+          // see it and React Native turns it into a fatal exception. Drop the
+          // state that could not be played rather than take the process with it.
+          recoverToHome();
+          return;
         } finally {
           setAiBusy(false);
         }
@@ -179,7 +201,7 @@ export default function App() {
         }
       }, AI_DELAY_MS);
     },
-    [],
+    [recoverToHome],
   );
 
   // The computer moves whenever it is on the move. Driving this from the state
@@ -187,7 +209,9 @@ export default function App() {
   // computer's think time and resumed later, which would otherwise never move on.
   useEffect(() => {
     if (screen.name !== 'game' || !game || game.phase === 'over') return;
-    if (aiBusy || !game.players[game.current].isAI) return;
+    // The computer only ever has a turn to take from the firing phase; a save
+    // claiming otherwise would throw inside the timer above.
+    if (aiBusy || game.phase !== 'fire' || !game.players[game.current].isAI) return;
     scheduleAiTurn(game, difficulty);
   }, [screen.name, game, aiBusy, difficulty, scheduleAiTurn]);
 
@@ -238,21 +262,6 @@ export default function App() {
     setGame(null);
     setScreen({ name: 'home' });
   }, [game, difficulty]);
-
-  /**
-   * Recover from a render that threw. The state in hand is what failed to draw,
-   * so it is dropped rather than saved back, and the offer is rebuilt from disk
-   * through `loadGame` – which validates and discards a save it cannot read, so
-   * a crash on resume cannot repeat forever.
-   */
-  const recoverToHome = useCallback(() => {
-    if (aiTimer.current) clearTimeout(aiTimer.current);
-    if (overTimer.current) clearTimeout(overTimer.current);
-    setAiBusy(false);
-    setGame(null);
-    setScreen({ name: 'home' });
-    void loadGame().then((s) => setSaved(s ? toOffer(s) : null));
-  }, []);
 
   const onResume = useCallback(() => {
     if (!saved) return;

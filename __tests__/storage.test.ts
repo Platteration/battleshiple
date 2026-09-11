@@ -68,24 +68,31 @@ describe('storage', () => {
     expect(await AsyncStorage.getItem(KEY)).toBeNull();
   });
 
+  async function savedPayload(): Promise<Record<string, any>> {
+    await saveGame(game(), 'normal');
+    return JSON.parse((await AsyncStorage.getItem(KEY)) as string);
+  }
+
+  async function expectRejected(mutate: (p: Record<string, any>) => void) {
+    const payload = await savedPayload();
+    mutate(payload);
+    await AsyncStorage.setItem(KEY, JSON.stringify(payload));
+    expect(await loadGame()).toBeNull();
+    // ...and dropped, so the same crash is not offered again on the next launch.
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
+  }
+
+  async function expectAccepted(mutate: (p: Record<string, any>) => void) {
+    const payload = await savedPayload();
+    mutate(payload);
+    await AsyncStorage.setItem(KEY, JSON.stringify(payload));
+    expect(await loadGame()).not.toBeNull();
+  }
+
   // A save is replayed straight into the engine and the renderer without either
   // re-checking it, so a payload of the wrong shape throws during render rather
   // than merely playing oddly. Each case below is a documented crash site.
   describe('a wrong-shaped save is refused rather than replayed', () => {
-    async function savedPayload(): Promise<Record<string, any>> {
-      await saveGame(game(), 'normal');
-      return JSON.parse((await AsyncStorage.getItem(KEY)) as string);
-    }
-
-    async function expectRejected(mutate: (p: Record<string, any>) => void) {
-      const payload = await savedPayload();
-      mutate(payload);
-      await AsyncStorage.setItem(KEY, JSON.stringify(payload));
-      expect(await loadGame()).toBeNull();
-      // ...and dropped, so the same crash is not offered again on the next launch.
-      expect(await AsyncStorage.getItem(KEY)).toBeNull();
-    }
-
     // The unmutated payload must survive, or every case below passes vacuously.
     test('the untouched payload still loads', async () => {
       const payload = await savedPayload();
@@ -132,6 +139,61 @@ describe('storage', () => {
 
     // A finished game is cleared rather than saved, so it is never resumable.
     test('a phase that cannot be resumed', () => expectRejected((p) => (p.state.phase = 'over')));
+
+    // Fields that are each valid on their own and wrong only together. The
+    // computer's turn opens with fire(), which throws outside the firing phase –
+    // and it throws inside the AI's timer, where the error boundary never sees
+    // it. The app cannot write either pair: a computer's turn is fired,
+    // manoeuvred and ended in one synchronous block, and a local match has no
+    // computer in it at all.
+    test('the computer to move outside the firing phase', () =>
+      expectRejected((p) => {
+        p.state.current = 1;
+        p.state.phase = 'maneuver';
+      }));
+    test('a computer playing in a pass & play match', () => expectRejected((p) => (p.state.mode = 'local')));
+
+    // ...while the same phase with the human to move is an ordinary pause.
+    test('a human mid-manoeuvre still loads', () =>
+      expectAccepted((p) => {
+        p.state.current = 0;
+        p.state.phase = 'maneuver';
+      }));
+    test('a pass & play save with no computer in it still loads', async () => {
+      await saveGame(createGame({ mode: 'local', names: ['P1', 'P2'], fleets: [fleet(), fleet()] }), 'normal');
+      expect(await loadGame()).not.toBeNull();
+    });
+  });
+
+  // Shape is not size. Every element below is exactly what the validator asks
+  // for; only the count is impossible. It matters because the AI pairs each
+  // recent hit with every other one (quadratic in the history it is handed) and
+  // the game screen draws a line per log entry and per splash, so a save of the
+  // right shape and the wrong size freezes the app on Resume instead of playing.
+  describe('a save of the right shape and an impossible size is refused', () => {
+    const shot = (i: number) => ({ r: 0, c: i % 2, result: 'hit', turn: 0 });
+
+    test('a shot history no game could fire', () =>
+      expectRejected((p) => (p.state.players[1].shots = Array.from({ length: 20000 }, (_, i) => shot(i)))));
+
+    test('more splashes than the opponent could leave', () =>
+      expectRejected((p) => (p.state.players[0].splashes = Array.from({ length: 5000 }, () => ({ quadrant: 'NE', turn: 0 })))));
+
+    test('a log no game could write', () =>
+      expectRejected((p) =>
+        (p.state.log = Array.from({ length: 20000 }, () => ({ turn: 0, by: 0, kind: 'system', text: 'x' }))),
+      ));
+
+    test('more hulls than the fleet is dealt', () =>
+      expectRejected((p) => p.state.players[0].ships.push(JSON.parse(JSON.stringify(p.state.players[1].ships[4])))));
+
+    // The other half of the bound: the README measures a median of 108 turns a
+    // side, so a save twice that long is a real game and has to survive.
+    test('a game far longer than the median still loads', () =>
+      expectAccepted((p) => {
+        p.state.players[0].shots = Array.from({ length: 216 }, (_, i) => ({ ...shot(i), result: 'miss' }));
+        p.state.log = Array.from({ length: 650 }, () => ({ turn: 0, by: 0, kind: 'shot', text: 'Player 1 fired at A1: miss.' }));
+      }));
   });
 
   test('a storage failure never propagates to the caller', async () => {

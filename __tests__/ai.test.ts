@@ -1,5 +1,6 @@
 import { aiChooseManeuver, aiChooseShot } from '../src/engine/ai';
 import { createGame, endTurn, fire, maneuver } from '../src/engine/game';
+import { coordKey } from '../src/engine/geometry';
 import { seededRng } from '../src/engine/random';
 import { cellsOf, makeShip, randomFleet } from '../src/engine/ships';
 import { GameState } from '../src/engine/types';
@@ -122,5 +123,48 @@ describe('ai difficulty and splash intel', () => {
     const shot = aiChooseShot({ ...g, current: 1, phase: 'fire' }, 1, rng, 'hard');
     expect(shot).toBeDefined();
     expect(shot.r).toBeLessThan(10);
+  });
+});
+
+describe('ai target mode is bounded by the board, not by the history', () => {
+  /** Hits on three cells, the first of them recorded `repeats` times over. */
+  function stateWithRepeatedHits(repeats: number): GameState {
+    const rng = seededRng(21);
+    const g = createGame({ mode: 'ai', names: ['A', 'AI'], fleets: [randomFleet(rng), randomFleet(rng)], aiPlayer: 1 });
+    const hit = (r: number, c: number) => ({ r, c, result: 'hit' as const, turn: 0 });
+    const shots = [...Array.from({ length: repeats }, () => hit(5, 5)), hit(5, 6), hit(6, 6)];
+    return { ...g, current: 1, players: [g.players[0], { ...g.players[1], shots }] };
+  }
+
+  /** The four cells that extend the line through one of the two adjacent pairs. */
+  const extensions = ['5,7', '5,4', '7,6', '4,6'];
+
+  // A hull drifting back over a cell can be hit there again and again, and a
+  // restored save can claim a history no game played. Either way the same cell
+  // must count once: the pair loop is quadratic in what it is handed.
+  test('a cell hit a hundred times over does not crowd out the other follow-ups', () => {
+    const g = stateWithRepeatedHits(100);
+    const rng = seededRng(4);
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 200; i++) {
+      const key = coordKey(aiChooseShot(g, 1, rng, 'hard'));
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    expect([...counts.keys()].sort()).toEqual([...extensions].sort());
+    // Each line is chosen about a quarter of the time; weighted by the repeats,
+    // the two through (6,6) would come up in well under one draw in a hundred.
+    for (const cell of extensions) expect(counts.get(cell)).toBeGreaterThan(200 / extensions.length / 2);
+  });
+
+  // Measured on the unbounded loop: 2000 hits took 2.2 s and 101 MB, 4000 took
+  // 9.4 s and 337 MB, 20000 exhausted a 512 MB heap. On a phone that is the app
+  // being killed on Resume rather than taking a slow turn.
+  test('a history no game could fire is still answered at once', () => {
+    const g = stateWithRepeatedHits(4000);
+    const rng = seededRng(6);
+    const started = Date.now();
+    const shot = aiChooseShot(g, 1, rng, 'hard');
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(extensions).toContain(coordKey(shot));
   });
 });

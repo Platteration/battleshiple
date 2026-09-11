@@ -129,14 +129,17 @@ export function aiChooseShot(
 
   // ---- Target mode: finish what we started. ----
   if (profile.useTargeting) {
-    const hot = me.shots
-      .filter(
-        (s) =>
-          s.result === 'hit' &&
-          !sunkCells.has(coordKey(s)) &&
-          state.turn - s.turn <= profile.hotHitWindow,
-      )
-      .sort((a, b) => b.turn - a.turn);
+    const recentHits = me.shots.filter(
+      (s) =>
+        s.result === 'hit' &&
+        !sunkCells.has(coordKey(s)) &&
+        state.turn - s.turn <= profile.hotHitWindow,
+    );
+    // One record per cell, newest first. A hull drifting back over a cell can be
+    // hit there again and again, and the pair loop below is quadratic, so the
+    // work has to be bounded by the board (at most BOARD_SIZE * BOARD_SIZE
+    // cells) rather than by the length of a history we did not necessarily play.
+    const hot = [...latestByCell(recentHits).values()].sort((a, b) => b.turn - a.turn);
 
     if (hot.length > 0) {
       const candidates: Coord[] = [];

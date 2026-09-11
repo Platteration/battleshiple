@@ -3,11 +3,26 @@ import React from 'react';
 import { Alert, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import App from '../App';
+import { fire } from '../src/engine';
+import { loadGame } from '../src/storage';
 import { ErrorBoundary } from '../src/ui/components/ErrorBoundary';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+
+// The engine and the store stay real; these two are wrapped so that a single
+// test can make the computer's turn fail, or hand the app a save no build of it
+// would ever write.
+jest.mock('../src/engine', () => {
+  const actual = jest.requireActual('../src/engine');
+  return { ...actual, fire: jest.fn(actual.fire) };
+});
+
+jest.mock('../src/storage', () => {
+  const actual = jest.requireActual('../src/storage');
+  return { ...actual, loadGame: jest.fn(actual.loadGame) };
+});
 
 jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
@@ -323,6 +338,71 @@ describe('App', () => {
         boundary!.unmount();
       });
     }
+  });
+
+  // The computer's turn runs inside a timer. React error boundaries only see
+  // throws from render, so one from here leaves the timer as a fatal exception
+  // (JSTimers rethrows it) and takes the process with it – and since the save
+  // that caused it is still on disk, every launch offers the same Resume.
+  test('a computer turn that throws goes back to the menu instead of killing the app', async () => {
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    pressText(root, 'Hold position');
+    expect(hasText(root, 'is taking their turn')).toBe(true);
+
+    (fire as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('the state could not be played');
+    });
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+    await flush();
+
+    // Back at the menu, with the offer rebuilt from disk through the validator.
+    expect(hasText(root, 'BATTLESHIPLE')).toBe(true);
+    expect(hasText(root, 'Unfinished battle')).toBe(true);
+  });
+
+  test('the computer is never asked to take a turn it cannot take', async () => {
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    await flush();
+    act(() => {
+      renderer.unmount();
+    });
+
+    // A save with the computer to move in the manoeuvre phase: every field is
+    // valid on its own, and the turn it would start with throws. The validator
+    // refuses it, so it is forced past that here as a later build might.
+    const poisoned = JSON.parse((await AsyncStorage.getItem('battleshiple:savegame:v1')) as string);
+    poisoned.state.current = 1;
+    poisoned.state.phase = 'maneuver';
+    (loadGame as jest.Mock).mockResolvedValueOnce(poisoned);
+
+    let fresh: ReactTestRenderer;
+    await act(async () => {
+      fresh = create(<App />);
+    });
+    await flush();
+    expect(hasText(fresh!.root, 'Unfinished battle')).toBe(true);
+    (fire as jest.Mock).mockClear();
+    pressText(fresh!.root, 'Resume game');
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+    // The driver leaves it alone rather than firing out of the firing phase.
+    expect(fire).not.toHaveBeenCalled();
+    act(() => {
+      fresh!.unmount();
+    });
   });
 
   test('a saved game found at launch is offered, and can be discarded', async () => {

@@ -342,9 +342,13 @@ describe('App', () => {
 
   // The computer's turn runs inside a timer. React error boundaries only see
   // throws from render, so one from here leaves the timer as a fatal exception
-  // (JSTimers rethrows it) and takes the process with it – and since the save
-  // that caused it is still on disk, every launch offers the same Resume.
-  test('a computer turn that throws goes back to the menu instead of killing the app', async () => {
+  // (JSTimers rethrows it) and takes the process with it.
+  //
+  // The state that failed is also the state on the disk – the autosave writes
+  // whatever is on screen – and `loadGame` only deletes a save it *refuses*,
+  // which this one is not. So the menu must not offer it straight back, or
+  // Resume is a loop with the same failure at the end of it every time.
+  test('a computer turn that throws goes back to the menu and is not offered again', async () => {
     const root = renderer.root;
     pressText(root, 'Play vs Computer');
     pressText(root, 'Random');
@@ -354,17 +358,40 @@ describe('App', () => {
     pressText(root, 'Hold position');
     expect(hasText(root, 'is taking their turn')).toBe(true);
 
-    (fire as jest.Mock).mockImplementationOnce(() => {
-      throw new Error('the state could not be played');
-    });
-    act(() => {
-      jest.advanceTimersByTime(1500);
-    });
-    await flush();
+    const logged = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      (fire as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('the state could not be played');
+      });
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      await flush();
 
-    // Back at the menu, with the offer rebuilt from disk through the validator.
-    expect(hasText(root, 'BATTLESHIPLE')).toBe(true);
-    expect(hasText(root, 'Unfinished battle')).toBe(true);
+      // Back at the menu...
+      expect(hasText(root, 'BATTLESHIPLE')).toBe(true);
+      // ...told why, and without the offer that would walk straight back in.
+      expect(hasText(root, 'could not be played')).toBe(true);
+      expect(hasText(root, 'has not been deleted')).toBe(true);
+      expect(hasText(root, 'Unfinished battle')).toBe(false);
+      // The failure left a trace: 'it goes back to the menu sometimes' is not a
+      // bug report anyone can act on.
+      expect(logged).toHaveBeenCalled();
+      expect(String(logged.mock.calls[0][1])).toContain('the state could not be played');
+    } finally {
+      logged.mockRestore();
+    }
+
+    // The battle is set aside, not deleted: it is still on the disk, and a new
+    // one would still spend it, so starting one still asks first.
+    expect(await AsyncStorage.getItem('battleshiple:savegame:v1')).not.toBeNull();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    try {
+      pressText(root, 'Play vs Computer');
+      expect(alert).toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
   });
 
   test('the computer is never asked to take a turn it cannot take', async () => {
@@ -398,8 +425,17 @@ describe('App', () => {
     act(() => {
       jest.advanceTimersByTime(1500);
     });
-    // The driver leaves it alone rather than firing out of the firing phase.
+    await flush();
+    // The driver does not fire out of the firing phase...
     expect(fire).not.toHaveBeenCalled();
+    // ...and does not leave the player on the board it has just decided it
+    // cannot play either: the computer is to move, so nothing on that screen
+    // advances anything. It gives up the way a failed turn does.
+    expect(hasText(fresh!.root, 'BATTLESHIPLE')).toBe(true);
+    expect(hasText(fresh!.root, 'Quit to menu')).toBe(false);
+    // The save it came from is one the validator now refuses outright, so the
+    // player is told that rather than promised it back on the next launch.
+    expect(hasText(fresh!.root, 'could not be read back')).toBe(true);
     act(() => {
       fresh!.unmount();
     });

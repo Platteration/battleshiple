@@ -71,6 +71,17 @@ A match is autosaved after every change and when the app is backgrounded, so a
 phone call will not cost you a game. Quitting to the menu keeps the game, and
 the menu offers to resume or discard it. Finishing a game clears the save.
 
+The save lives on the device. On Android it is deliberately kept out of cloud
+backup and device-to-device transfer, so a reinstall or a new phone starts with
+an empty menu rather than with an unfinished battle; on iOS it travels only as
+part of a full device backup. There is one save slot, and starting a new battle
+spends it — the app asks first.
+
+A marathon match — thousands of turns, far beyond any finished game — keeps its
+oldest log lines and shot markers only up to a generous ceiling. The match
+itself is never thrown away for being too long, and a battle the app fails to
+play is set aside rather than deleted.
+
 ## Balance
 
 Numbers from simulated games in `npm test` territory, 300-600 games per row.

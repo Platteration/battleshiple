@@ -10,6 +10,8 @@ interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
   onStart: (mode: GameMode) => void;
+  /** Present when something went wrong and the player is owed an explanation. */
+  notice?: string;
   /** Present when an unfinished game is on disk. */
   resume?: { label: string; onResume: () => void; onDiscard: () => void };
 }
@@ -26,7 +28,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, onStart, notice, resume }: Props) {
   const [showRules, setShowRules] = useState(false);
   return (
     <Screen>
@@ -34,6 +36,12 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: 
         <Text style={styles.title}>BATTLESHIPLE</Text>
         <Text style={styles.subtitle}>Battleship, but the fleets won't sit still.</Text>
       </View>
+
+      {notice && (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      )}
 
       {resume && (
         <View style={styles.resume}>
@@ -110,6 +118,14 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  notice: {
+    backgroundColor: colors.panel,
+    borderColor: colors.panelBorder,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  noticeText: { color: colors.textDim, fontSize: 13, lineHeight: 18 },
   resumeLabel: { color: colors.accent, fontWeight: '800', fontSize: 14 },
   resumeMeta: { color: colors.textDim, fontSize: 13 },
   blurb: { color: colors.textDim, fontSize: 13, marginTop: -spacing.xs },

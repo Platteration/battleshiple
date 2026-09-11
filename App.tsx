@@ -50,6 +50,22 @@ function describeSave(state: GameState, savedAt: number): string {
   return `${mode} · turn ${turn} · saved ${when}`;
 }
 
+/** Shown when a battle could not be played and its save is still on the device. */
+const SET_ASIDE_NOTICE =
+  'That battle could not be played, so it is not being offered here. It has not been deleted – the next launch will offer it again.';
+/** ...and when the save behind it could not be read back at all. */
+const UNREADABLE_NOTICE = 'That battle could not be played, and the save it came from could not be read back.';
+
+/**
+ * Enough of a state to recognise the same battle, at the same half-turn, coming
+ * back off the disk: the autosave writes whatever is on screen, so the state a
+ * turn failed on is the one `loadGame` hands back. Lengths are deliberately not
+ * part of it, because a save may be clipped on its way in.
+ */
+function saveSignature(s: GameState): string {
+  return [s.mode, s.turn, s.current, s.phase, s.maneuveredShipId ?? ''].join(':');
+}
+
 type ResumeOffer = { state: GameState; difficulty: Difficulty; label: string };
 
 function toOffer(s: SavedGame): ResumeOffer {
@@ -64,8 +80,16 @@ export default function App() {
   const [game, setGame] = useState<GameState | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [saved, setSaved] = useState<ResumeOffer | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const aiTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The recovery below runs from a timer and from the error boundary, neither of
+  // which can see what the current render is holding.
+  const gameRef = useRef<GameState | null>(null);
+  /** The battle a turn has already failed on, so it is not offered again. */
+  const failedSave = useRef<string | null>(null);
+  /** ...and whether that battle is still on the disk for a new one to spend. */
+  const setAside = useRef(false);
 
   // Offer to resume whatever was left unfinished.
   useEffect(() => {
@@ -86,6 +110,10 @@ export default function App() {
     [],
   );
 
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
+
   // Autosave whenever the board changes, and again when the app is backgrounded.
   useEffect(() => {
     if (!game || game.phase === 'over') return;
@@ -104,6 +132,8 @@ export default function App() {
   const startSetup = useCallback(
     (m: GameMode) => {
       const go = () => {
+        setNotice(null);
+        setAside.current = false;
         setMode(m);
         setFleets([null, null]);
         setGame(null);
@@ -113,7 +143,9 @@ export default function App() {
       // autosave of the new match overwrites the saved one. Games here run for
       // eighty turns a side, so ask before spending someone's mis-tap on one.
       // The save itself is left alone until then: backing out of setup keeps it.
-      if (saved) {
+      // A battle set aside by the recovery below is not offered on the menu but
+      // is still on the disk, so it is still something a new match would spend.
+      if (saved || setAside.current) {
         Alert.alert('Start a new battle?', 'The unfinished battle will be discarded once the new fleets are deployed.', [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Discard and start', style: 'destructive', onPress: go },
@@ -155,18 +187,39 @@ export default function App() {
 
   /**
    * Give up on a turn that cannot be played – a screen that threw while drawing,
-   * or the computer's own timer below. The state in hand is what failed, so it is
-   * dropped rather than saved back, and the offer is rebuilt from disk through
-   * `loadGame` – which validates and discards a save it cannot read, so a crash
-   * on resume cannot repeat forever.
+   * the computer's own timer below, or a state the driver has decided it cannot
+   * play at all. The state in hand is what failed, so it is dropped rather than
+   * saved back, and the offer is rebuilt from disk.
+   *
+   * What is on the disk, though, is the state that just failed: the autosave
+   * writes whatever is on screen, and `loadGame` only deletes a save it
+   * *refuses* – which a save that got this far, by definition, is not. So the
+   * battle that failed is remembered here and left off the menu, or resuming
+   * would hand the player straight back into the same failure for as long as
+   * they kept pressing the button. This recovery does not delete it: the fault
+   * may well be ours, and a later build may play it perfectly.
    */
-  const recoverToHome = useCallback(() => {
+  const recoverToHome = useCallback((err?: unknown) => {
     if (aiTimer.current) clearTimeout(aiTimer.current);
     if (overTimer.current) clearTimeout(overTimer.current);
+    // Never swallowed. A regression in the engine or in the driver shows up to a
+    // player as 'the app went back to the menu', and this is the only trace of
+    // what it actually was.
+    if (err !== undefined) console.error('Battleshiple: gave up on a turn that could not be played', err);
+    const failed = gameRef.current;
+    if (failed) failedSave.current = saveSignature(failed);
     setAiBusy(false);
     setGame(null);
     setScreen({ name: 'home' });
-    void loadGame().then((s) => setSaved(s ? toOffer(s) : null));
+    void loadGame().then((s) => {
+      // The battle that just failed is the one on the disk; anything else there
+      // is a different battle and is offered as usual.
+      const offerable = !!s && saveSignature(s.state) !== failedSave.current;
+      setSaved(offerable && s ? toOffer(s) : null);
+      setAside.current = !!s && !offerable;
+      if (!failed || offerable) setNotice(null);
+      else setNotice(s ? SET_ASIDE_NOTICE : UNREADABLE_NOTICE);
+    });
   }, []);
 
   /** Play the computer's whole turn after a pause, then hand control back. */
@@ -175,25 +228,29 @@ export default function App() {
       setAiBusy(true);
       aiTimer.current = setTimeout(() => {
         let s = g;
+        let hit = false;
         try {
           const ai = s.current;
           const res = fire(s, aiChooseShot(s, ai, defaultRng, level));
           s = res.state;
-          if (res.result.result === 'hit') feedback.incoming();
+          hit = res.result.result === 'hit';
           if (s.phase !== 'over') {
             const mv = aiChooseManeuver(s, ai, defaultRng, level);
             if (mv) s = maneuver(s, mv.shipId, mv.maneuver);
             s = endTurn(s);
           }
-        } catch {
+        } catch (err) {
           // A throw here is on the timer's own stack, where no error boundary can
           // see it and React Native turns it into a fatal exception. Drop the
           // state that could not be played rather than take the process with it.
-          recoverToHome();
+          recoverToHome(err);
           return;
         } finally {
           setAiBusy(false);
         }
+        // Outside the try: haptics are best-effort, and a buzz that failed is
+        // not a turn that failed.
+        if (hit) feedback.incoming();
         setGame(s);
         if (s.phase === 'over') {
           void clearGame();
@@ -209,11 +266,19 @@ export default function App() {
   // computer's think time and resumed later, which would otherwise never move on.
   useEffect(() => {
     if (screen.name !== 'game' || !game || game.phase === 'over') return;
-    // The computer only ever has a turn to take from the firing phase; a save
-    // claiming otherwise would throw inside the timer above.
-    if (aiBusy || game.phase !== 'fire' || !game.players[game.current].isAI) return;
+    if (aiBusy || !game.players[game.current].isAI) return;
+    // The computer only ever has a turn to take from the firing phase, and the
+    // validator refuses a save that says otherwise. If one reaches here anyway,
+    // playing it throws inside the timer above – and simply declining to play it
+    // is worse than that, not better: the player to move is the computer, so the
+    // board is disabled, no button on the screen advances anything, and the only
+    // way out is to quit. Give up on it the way a failed turn does.
+    if (game.phase !== 'fire') {
+      recoverToHome();
+      return;
+    }
     scheduleAiTurn(game, difficulty);
-  }, [screen.name, game, aiBusy, difficulty, scheduleAiTurn]);
+  }, [screen.name, game, aiBusy, difficulty, scheduleAiTurn, recoverToHome]);
 
   const onFire = useCallback(
     (coord: Coord) => {
@@ -286,6 +351,7 @@ export default function App() {
       difficulty={difficulty}
       onDifficultyChange={setDifficulty}
       onStart={startSetup}
+      notice={notice ?? undefined}
       resume={saved ? { label: saved.label, onResume, onDiscard: onDiscardSave } : undefined}
     />
   );

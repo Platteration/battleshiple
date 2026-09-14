@@ -1,29 +1,29 @@
 import { ShipClassId } from '../engine';
 
 export const colors = {
-  bg: '#061a2b',
-  panel: '#0b2740',
-  panelBorder: '#164466',
-  water: '#0e3a5c',
-  waterLine: '#1b5280',
-  waterDeep: '#0a2e4a',
-  text: '#e6f1fb',
-  textDim: '#8fb3d1',
-  accent: '#ffd166',
+  bg: '#19232d',
+  panel: '#24323e',
+  panelBorder: '#526674',
+  water: '#315563',
+  waterLine: '#577883',
+  waterDeep: '#294651',
+  text: '#f7f1e5',
+  textDim: '#b7c2c7',
+  accent: '#e8bd70',
   accentText: '#1a1a1a',
-  danger: '#ff4d4d',
-  success: '#3ddc97',
+  danger: '#ef9290',
+  success: '#93c6a1',
   miss: '#cfe8ff',
-  hit: '#ff4d4d',
+  hit: '#ef9290',
   sunk: '#3a3f47',
-  selected: '#ffd166',
+  selected: '#e8bd70',
   // Cyan, not green: green collided with the Destroyer's hull colour, so a
   // manoeuvre preview was easy to read as another ship. Splashes never render
   // on the fleet board, so cyan is unambiguous there.
   previewOk: 'rgba(155, 224, 255, 0.50)',
   previewOkBorder: '#9be0ff',
   previewBad: 'rgba(255, 77, 77, 0.50)',
-  previewBadBorder: '#ff4d4d',
+  previewBadBorder: '#ef9290',
   splash: '#9be0ff',
 };
 
@@ -44,7 +44,7 @@ export const spacing = {
 };
 
 export const radius = {
-  sm: 6,
-  md: 10,
+  sm: 8,
+  md: 12,
   lg: 16,
 };

@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#061a2b",
+    "backgroundColor": "#19232d",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.platteration.battleshiple"
@@ -14,7 +14,7 @@
     "android": {
       "package": "com.platteration.battleshiple",
       "adaptiveIcon": {
-        "backgroundColor": "#061a2b",
+        "backgroundColor": "#19232d",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -32,7 +32,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#061a2b"
+          "backgroundColor": "#19232d"
         }
       ]
     ]

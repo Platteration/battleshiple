@@ -3,6 +3,12 @@ import { Difficulty, GameState } from './engine';
 
 const KEY = 'battleshiple:savegame:v1';
 
+function safeParse<T>(text: string): T {
+  return JSON.parse(text, (key, value) => {
+    return key === '__proto__' || key === 'constructor' || key === 'prototype' ? undefined : value;
+  }) as T;
+}
+
 export interface SavedGame {
   version: 1;
   savedAt: number;
@@ -45,7 +51,7 @@ export async function loadGame(): Promise<SavedGame | null> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = safeParse(raw);
     if (!isValid(parsed)) {
       await clearGame();
       return null;

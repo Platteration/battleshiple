@@ -162,7 +162,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  selectedShip: { borderWidth: 2, borderColor: colors.selected },
+  // Per-side colours resolve ahead of `borderColor`, so the ring must name
+  // every side or the hull's bevel (set per side above) wins and no ring shows.
+  selectedShip: {
+    borderWidth: 2,
+    borderBottomWidth: 2,
+    borderTopColor: colors.selected,
+    borderLeftColor: colors.selected,
+    borderRightColor: colors.selected,
+    borderBottomColor: colors.selected,
+  },
   preview: { borderWidth: 2, borderStyle: 'dashed' },
   bow: { color: 'rgba(0,0,0,0.65)', fontWeight: '900' },
   hitMark: { color: colors.hit, fontWeight: '900', position: 'absolute' },

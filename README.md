@@ -113,7 +113,7 @@ shortcut, and the cost is spread evenly across the match at about 15 shots per
 kill rather than concentrated in a slow endgame. Shrinking the board or the
 fleet would be the lever to pull if that proves too long in play.
 
-## Running the app
+## Running it
 
 Requires Node 22 and the Expo tooling.
 
@@ -138,11 +138,16 @@ eas build -p android --profile preview
 ## Development
 
 ```bash
-npm run typecheck   # TypeScript
-npm test            # Jest (engine unit tests + UI smoke tests)
+npm run typecheck          # TypeScript
+npm test                   # Jest (engine unit tests + UI smoke tests)
+npm run test:conventions   # the conventions shared with the sibling repositories
+npm run check              # all of the above: the gate before a push
 ```
 
-### Project layout
+CI runs the same steps one at a time, then bundles the app for Android with
+`expo export`.
+
+## Project layout
 
 ```
 App.tsx                  screen state machine (home → setup → game → over)

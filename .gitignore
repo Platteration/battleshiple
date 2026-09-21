@@ -30,15 +30,19 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-# `.env*.local` alone leaves a plain `.env` tracked, which is exactly where
-# EAS or store credentials would land the day this app needs any.
-.env*
-!.env.example
-
 # typescript
 *.tsbuildinfo
 
 # generated native folders
 /ios
 /android
+
+# editors
+.vscode/
+.idea/
+
+.claude/settings.local.json
+
+# Secrets: ignore every .env variant, but keep the documented template.
+.env*
+!.env.example

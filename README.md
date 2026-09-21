@@ -138,6 +138,7 @@ eas build -p android --profile preview
 ## Development
 
 ```bash
+npm run lint               # ESLint (Expo's preset)
 npm run typecheck          # TypeScript
 npm test                   # Jest (engine unit tests + UI smoke tests)
 npm run test:conventions   # the conventions shared with the sibling repositories

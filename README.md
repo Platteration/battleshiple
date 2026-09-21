@@ -160,7 +160,9 @@ src/engine/              pure TypeScript rules, no React
   maneuver.ts            move / shift / rotate validation and cooldowns
   game.ts                fire, manoeuvre, end turn, splashes, win detection
   ai.ts                  computer opponent and difficulty profiles
-src/storage.ts           autosave / resume on AsyncStorage
+src/storage.ts           autosave / resume on AsyncStorage, and every storage key
+src/settings.tsx         preferences (vibration, reduce motion, computer skill)
+src/validate.ts          clamps the stored preferences to values the app knows
 src/ui/                  React Native components and screens
 __tests__/               Jest suites
 ```

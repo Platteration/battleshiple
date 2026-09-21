@@ -195,6 +195,44 @@ describe('App', () => {
     expect(hasText(root, 'rarely repositions')).toBe(true);
   });
 
+  test('the chosen difficulty survives a restart', async () => {
+    pressText(renderer.root, 'Hard');
+    await flush();
+    // It is a preference, so it lives in the settings record, not with the game.
+    const stored = JSON.parse((await AsyncStorage.getItem('battleshiple.settings.v1')) as string);
+    expect(stored.difficulty).toBe('hard');
+    expect(await AsyncStorage.getItem('battleshiple:savegame:v1')).toBeNull();
+    act(() => {
+      renderer.unmount();
+    });
+
+    let fresh: ReactTestRenderer;
+    await act(async () => {
+      fresh = create(<App />);
+    });
+    await flush();
+    expect(hasText(fresh!.root, 'Reads your splashes')).toBe(true);
+    act(() => {
+      fresh!.unmount();
+    });
+  });
+
+  test('a stored difficulty the engine has no profile for falls back rather than crashing the computer\'s turn', async () => {
+    act(() => {
+      renderer.unmount();
+    });
+    await AsyncStorage.setItem('battleshiple.settings.v1', '{"difficulty":"constructor","haptics":"on"}');
+    let fresh: ReactTestRenderer;
+    await act(async () => {
+      fresh = create(<App />);
+    });
+    await flush();
+    expect(hasText(fresh!.root, 'Hunts methodically')).toBe(true);
+    act(() => {
+      fresh!.unmount();
+    });
+  });
+
   test('an interrupted game is autosaved and can be resumed from the menu', async () => {
     const root = renderer.root;
     pressText(root, 'Play vs Computer');

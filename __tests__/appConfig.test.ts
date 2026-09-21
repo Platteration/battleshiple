@@ -302,9 +302,9 @@ describe('what leaves the device', () => {
 
   it('keeps the savegame out of Android backup', () => {
     // @expo/config-plugins defaults allowBackup to true, writing over the bare
-    // template's own false. The only record this app keeps is one in-progress
-    // game (src/storage.ts, key battleshiple:savegame:v1): a JSON snapshot
-    // worth nothing off the device, and `adb backup` / `adb restore` of a
+    // template's own false. The records this app keeps are one in-progress
+    // game and three preferences (src/storage.ts, STORAGE_KEYS): JSON worth
+    // nothing off the device, and `adb backup` / `adb restore` of a
     // backup-enabled app is exactly how a save the validator has to refuse
     // gets written in the first place. Nothing worth restoring, nothing that
     // should leave the device by default.

@@ -16,7 +16,43 @@ import {
   inBounds,
 } from './engine';
 
-const KEY = 'battleshiple:savegame:v1';
+/**
+ * Every key the app writes, so a rename cannot happen in one file and orphan
+ * the record behind it. The savegame keeps its colon-form key: it predates the
+ * `<app>.<record>.v<N>` scheme the newer record follows, and renaming it for
+ * spelling would put every player's unfinished battle through a migration for
+ * nothing. Both are pinned by `__tests__/settings-contract.test.ts`.
+ */
+export const STORAGE_KEYS = {
+  savegame: 'battleshiple:savegame:v1',
+  settings: 'battleshiple.settings.v1',
+} as const;
+
+const KEY = STORAGE_KEYS.savegame;
+
+/**
+ * The record stored under `key`, parsed and nothing more: `unknown` until a
+ * validator has been over it. Undefined when there is none, or when it cannot
+ * be read back — either way the caller's default applies.
+ */
+export async function loadJSON(key: string): Promise<unknown> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as unknown) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when the write reached the store. Persistence is best-effort and never interrupts play. */
+export async function saveJSON(key: string, value: unknown): Promise<boolean> {
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface SavedGame {
   version: 1;

@@ -19,6 +19,7 @@ import {
   maneuver,
   randomFleet,
 } from './src/engine';
+import { SettingsProvider, useSettings } from './src/settings';
 import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { feedback } from './src/ui/feedback';
@@ -73,8 +74,22 @@ function toOffer(s: SavedGame): ResumeOffer {
 }
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      <SettingsProvider>
+        <Game />
+      </SettingsProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function Game() {
+  const { settings, update } = useSettings();
+  // The computer's skill is a preference: chosen on the menu, kept across launches.
+  const difficulty = settings.difficulty;
+  const setDifficulty = useCallback((d: Difficulty) => update({ difficulty: d }), [update]);
   const [mode, setMode] = useState<GameMode>('ai');
-  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [fleets, setFleets] = useState<[Ship[] | null, Ship[] | null]>([null, null]);
   const [game, setGame] = useState<GameState | null>(null);
@@ -331,6 +346,8 @@ export default function App() {
   const onResume = useCallback(() => {
     if (!saved) return;
     setMode(saved.state.mode);
+    // The level the battle was being played at becomes the current choice, so
+    // the menu shows it again after a quit.
     setDifficulty(saved.difficulty);
     setGame(saved.state);
     setSaved(null);
@@ -339,7 +356,7 @@ export default function App() {
         ? { name: 'handoff', player: saved.state.current, reason: 'turn' }
         : { name: 'game' },
     );
-  }, [saved]);
+  }, [saved, setDifficulty]);
 
   const onDiscardSave = useCallback(() => {
     setSaved(null);
@@ -403,10 +420,5 @@ export default function App() {
       break;
   }
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <ErrorBoundary onReset={recoverToHome}>{content}</ErrorBoundary>
-    </SafeAreaProvider>
-  );
+  return <ErrorBoundary onReset={recoverToHome}>{content}</ErrorBoundary>;
 }

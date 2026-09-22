@@ -65,6 +65,13 @@ hit is a hint rather than a certainty.
 Only the hard opponent uses splash intelligence, so manoeuvring is nearly free
 against easy and normal, and a genuine trade-off against hard.
 
+## Settings
+
+From the menu: **Vibration** on or off, **Reduce motion** (system, on or off — holds
+the splash ripples still without hiding them), **Reset to defaults**, and an About
+card with the version and licence. The computer skill you pick on the menu is kept
+between launches. Nothing leaves your device: the app has no network code.
+
 ## Saved games
 
 A match is autosaved after every change and when the app is backgrounded, so a
@@ -163,6 +170,8 @@ src/engine/              pure TypeScript rules, no React
 src/storage.ts           autosave / resume on AsyncStorage, and every storage key
 src/settings.tsx         preferences (vibration, reduce motion, computer skill)
 src/validate.ts          clamps the stored preferences to values the app knows
+src/motion.ts            reduce-motion resolution (setting, device, web)
+src/confirm.ts           a confirmation that works on the web as well as a device
 src/ui/                  React Native components and screens
 __tests__/               Jest suites
 ```

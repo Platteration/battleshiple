@@ -28,6 +28,9 @@ export function FleetStatus({ ships, selectedId, onSelect, compact }: Props) {
         return (
           <Pressable
             key={ship.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${cls.name}, ${statusText(ship).toLowerCase()}`}
+            accessibilityState={{ selected, disabled: !onSelect || sunk }}
             disabled={!onSelect || sunk}
             onPress={() => onSelect?.(ship)}
             style={[styles.card, selected && styles.cardSelected, sunk && styles.cardSunk, compact && styles.cardCompact]}

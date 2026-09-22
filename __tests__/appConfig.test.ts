@@ -240,8 +240,10 @@ describe('permissions requested by the config plugins', () => {
 
 describe('what leaves the device', () => {
   it('does not ship network access', () => {
-    // The app has no network code (nothing in src/ or App.tsx calls fetch,
-    // opens a socket or a URL); INTERNET in the shipped manifest is what turns
+    // The app has no network code (nothing in src/ or App.tsx calls fetch or
+    // opens a socket; the About card hands one URL to the browser with
+    // Linking.openURL, which is the browser's network, not the app's);
+    // INTERNET in the shipped manifest is what turns
     // a malicious dependency or in-process code execution from 'reads the
     // save' into 'sends it somewhere'. The template and expo-file-system both
     // declare it, so it has to be blocked rather than merely not asked for.

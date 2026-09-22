@@ -118,7 +118,9 @@ export function Board({ grid, width, onPressCell, splashes = [], disabled }: Pro
           {row.map((cv, c) => (
             <Pressable
               key={c}
+              accessibilityRole="button"
               accessibilityLabel={`${COLS[c]}${r + 1}`}
+              accessibilityState={{ disabled: disabled || !onPressCell }}
               disabled={disabled || !onPressCell}
               onPress={() => onPressCell?.({ r, c })}
               style={[styles.cell, { width: cell, height: cell }]}

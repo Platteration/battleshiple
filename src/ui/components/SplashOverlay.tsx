@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { Quadrant } from '../../engine';
+import { useReduceMotion } from '../../motion';
+import { useSettings } from '../../settings';
 import { colors } from '../theme';
 
 interface Props {
@@ -9,6 +11,13 @@ interface Props {
   quadrants: Quadrant[];
 }
 
+/**
+ * Where a ripple is held when motion is reduced: a ring at half size, well
+ * inside the bright part of its fade, so the quadrant is still marked. The
+ * splash is information, not decoration — only the movement is optional.
+ */
+const STILL_PROGRESS = 0.35;
+
 function centerOf(q: Quadrant, size: number): { x: number; y: number } {
   const quarter = size / 4;
   const x = q === 'NE' || q === 'SE' ? size - quarter : quarter;
@@ -16,9 +25,13 @@ function centerOf(q: Quadrant, size: number): { x: number; y: number } {
   return { x, y };
 }
 
-function Ripple({ x, y, diameter, delay }: { x: number; y: number; diameter: number; delay: number }) {
+function Ripple({ x, y, diameter, delay, still }: { x: number; y: number; diameter: number; delay: number; still: boolean }) {
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (still) {
+      progress.setValue(STILL_PROGRESS);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.delay(delay),
@@ -28,7 +41,7 @@ function Ripple({ x, y, diameter, delay }: { x: number; y: number; diameter: num
     );
     loop.start();
     return () => loop.stop();
-  }, [progress, delay]);
+  }, [progress, delay, still]);
 
   const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] });
   const opacity = progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.9, 0] });
@@ -53,6 +66,8 @@ function Ripple({ x, y, diameter, delay }: { x: number; y: number; diameter: num
 
 /** Animated ripples marking the quadrant(s) where the enemy fleet just moved. */
 export function SplashOverlay({ size, quadrants }: Props) {
+  const { settings } = useSettings();
+  const still = useReduceMotion(settings.reduceMotion);
   if (quadrants.length === 0) return null;
   const unique = Array.from(new Set(quadrants));
   const diameter = size / 2.4;
@@ -62,9 +77,9 @@ export function SplashOverlay({ size, quadrants }: Props) {
         const { x, y } = centerOf(q, size);
         return (
           <React.Fragment key={q}>
-            <Ripple x={x} y={y} diameter={diameter} delay={0} />
-            <Ripple x={x} y={y} diameter={diameter} delay={550} />
-            <Ripple x={x} y={y} diameter={diameter * 0.35} delay={250} />
+            <Ripple x={x} y={y} diameter={diameter} delay={0} still={still} />
+            <Ripple x={x} y={y} diameter={diameter} delay={550} still={still} />
+            <Ripple x={x} y={y} diameter={diameter * 0.35} delay={250} still={still} />
           </React.Fragment>
         );
       })}

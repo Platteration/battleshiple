@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert, Platform, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import App from '../App';
 import { fire } from '../src/engine';
@@ -334,6 +334,42 @@ describe('App', () => {
     }
   });
 
+  test('on the web the same prompt goes through the browser, and the answer decides', async () => {
+    // react-native-web's Alert.alert is `static alert() {}`: with a saved
+    // battle, the start buttons used to do nothing at all on that platform.
+    const root = renderer.root;
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'B3');
+    pressText(root, 'FIRE at B3');
+    await flush();
+    pressText(root, 'Quit to menu');
+    expect(hasText(root, 'Unfinished battle')).toBe(true);
+
+    const realOS = Platform.OS;
+    const win = window as unknown as { confirm: (m?: string) => boolean };
+    const realConfirm = win.confirm;
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(function alert() {});
+    try {
+      Platform.OS = 'web';
+      win.confirm = jest.fn(() => false);
+      pressText(root, 'Pass & Play');
+      expect(win.confirm).toHaveBeenCalledTimes(1);
+      expect(hasText(root, 'deploy your fleet')).toBe(false);
+      expect(hasText(root, 'Unfinished battle')).toBe(true);
+
+      win.confirm = jest.fn(() => true);
+      pressText(root, 'Pass & Play');
+      expect(hasText(root, 'deploy your fleet')).toBe(true);
+      expect(alert).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = realOS;
+      win.confirm = realConfirm;
+      alert.mockRestore();
+    }
+  });
+
   test('with nothing saved, a new battle starts without a prompt', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     try {
@@ -343,6 +379,21 @@ describe('App', () => {
     } finally {
       alert.mockRestore();
     }
+  });
+
+  test('Settings is reached from the menu and leads back to it', async () => {
+    const root = renderer.root;
+    pressText(root, 'Settings');
+    expect(hasText(root, 'Vibration')).toBe(true);
+    expect(hasText(root, 'Reduce motion')).toBe(true);
+    expect(hasText(root, 'Nothing leaves your device')).toBe(true);
+    // A setting changed here is on the disk before the screen is left.
+    pressText(root, 'Off');
+    await flush();
+    expect(JSON.parse((await AsyncStorage.getItem('battleshiple.settings.v1')) as string).reduceMotion).toBe('off');
+    pressText(root, 'Back to menu');
+    expect(hasText(root, 'BATTLESHIPLE')).toBe(true);
+    expect(hasText(root, 'Play vs Computer')).toBe(true);
   });
 
   test('a screen that throws while rendering offers a way back instead of dying', () => {

@@ -159,9 +159,15 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
         </View>
       )}
 
-      <View style={styles.tabs}>
+      <View style={styles.tabs} accessibilityRole="tablist">
         {(['enemy', 'fleet'] as Tab[]).map((t) => (
-          <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
+          <Pressable
+            key={t}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === t }}
+            onPress={() => setTab(t)}
+            style={[styles.tab, tab === t && styles.tabActive]}
+          >
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
               {t === 'enemy' ? 'Enemy waters' : 'Your fleet'}
             </Text>

@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, AppState } from 'react-native';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   Coord,
@@ -20,6 +20,7 @@ import {
   randomFleet,
 } from './src/engine';
 import { SettingsProvider, useSettings } from './src/settings';
+import { confirmAction } from './src/confirm';
 import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { feedback } from './src/ui/feedback';
@@ -27,6 +28,7 @@ import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
 import { HandoffScreen } from './src/ui/screens/HandoffScreen';
 import { HomeScreen } from './src/ui/screens/HomeScreen';
+import { SettingsScreen } from './src/ui/screens/SettingsScreen';
 import { SetupScreen } from './src/ui/screens/SetupScreen';
 
 type Screen =
@@ -34,7 +36,8 @@ type Screen =
   | { name: 'setup'; player: PlayerIndex }
   | { name: 'handoff'; player: PlayerIndex; reason: 'setup' | 'turn' }
   | { name: 'game' }
-  | { name: 'over' };
+  | { name: 'over' }
+  | { name: 'settings' };
 
 const AI_NAME = 'Admiral Byte';
 const AI_DELAY_MS = 900;
@@ -161,10 +164,13 @@ function Game() {
       // A battle set aside by the recovery below is not offered on the menu but
       // is still on the disk, so it is still something a new match would spend.
       if (saved || setAside.current) {
-        Alert.alert('Start a new battle?', 'The unfinished battle will be discarded once the new fleets are deployed.', [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Discard and start', style: 'destructive', onPress: go },
-        ]);
+        confirmAction({
+          title: 'Start a new battle?',
+          message: 'The unfinished battle will be discarded once the new fleets are deployed.',
+          cancelLabel: 'Cancel',
+          confirmLabel: 'Discard and start',
+          onConfirm: go,
+        });
         return;
       }
       go();
@@ -368,6 +374,7 @@ function Game() {
       difficulty={difficulty}
       onDifficultyChange={setDifficulty}
       onStart={startSetup}
+      onSettings={() => setScreen({ name: 'settings' })}
       notice={notice ?? undefined}
       resume={saved ? { label: saved.label, onResume, onDiscard: onDiscardSave } : undefined}
     />
@@ -417,6 +424,9 @@ function Game() {
       ) : (
         home
       );
+      break;
+    case 'settings':
+      content = <SettingsScreen onBack={() => setScreen({ name: 'home' })} />;
       break;
   }
 

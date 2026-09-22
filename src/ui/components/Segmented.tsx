@@ -14,18 +14,19 @@ interface Props<T extends string> {
   label?: string;
 }
 
+/** One choice among a few, laid out as a bar. To a screen reader it is a named group of radio buttons. */
 export function Segmented<T extends string>({ options, value, onChange, label }: Props<T>) {
   return (
     <View style={styles.wrap}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={styles.bar}>
+      <View style={styles.bar} accessibilityRole="radiogroup" accessibilityLabel={label}>
         {options.map((opt) => {
           const active = opt.value === value;
           return (
             <Pressable
               key={opt.value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active, checked: active }}
               onPress={() => onChange(opt.value)}
               style={[styles.segment, active && styles.segmentActive]}
             >

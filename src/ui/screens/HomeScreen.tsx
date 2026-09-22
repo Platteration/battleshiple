@@ -10,6 +10,7 @@ interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
   onStart: (mode: GameMode) => void;
+  onSettings: () => void;
   /** Present when something went wrong and the player is owed an explanation. */
   notice?: string;
   /** Present when an unfinished game is on disk. */
@@ -28,7 +29,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, notice, resume }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, onStart, onSettings, notice, resume }: Props) {
   const [showRules, setShowRules] = useState(false);
   return (
     <Screen>
@@ -58,6 +59,7 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, notice, re
       <Button title="Play vs Computer" onPress={() => onStart('ai')} />
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />
       <Button title={showRules ? 'Hide rules' : 'How to play'} variant="ghost" onPress={() => setShowRules((v) => !v)} />
+      <Button title="Settings" variant="ghost" onPress={onSettings} />
 
       {showRules && (
         <View style={styles.rules}>

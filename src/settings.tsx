@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Difficulty } from './engine';
 import { loadJSON, saveJSON, STORAGE_KEYS } from './storage';
+import { setHapticsEnabled } from './ui/feedback';
 import { cleanSettings } from './validate';
 
 export type ReduceMotionSetting = 'system' | 'on' | 'off';
@@ -77,6 +78,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // first-run flag. If one is added it belongs in this record and is the one
   // field a reset keeps.
   const reset = useCallback(() => update({ ...DEFAULT_SETTINGS }), [update]);
+
+  // The module flag is what gates every call in feedback.ts, so the switch
+  // reaches shots fired from anywhere, not only from components that render
+  // under this provider.
+  useEffect(() => setHapticsEnabled(settings.haptics), [settings.haptics]);
 
   const value = useMemo(() => ({ settings, update, reset, loaded }), [settings, update, reset, loaded]);
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

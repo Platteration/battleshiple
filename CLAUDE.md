@@ -38,16 +38,38 @@ Preferences are one record under `battleshiple.settings.v1`: `haptics`, `reduceM
 (`system | on | off`) and `difficulty`, the computer skill the menu shows, kept so the choice
 survives a restart. `STORAGE_KEYS` in `src/storage.ts` names every key the app writes; the
 savegame keeps its older colon-form key because renaming it for spelling would put every
-player's unfinished battle through a migration for nothing. The record is read only through
-`cleanSettings` in `src/validate.ts`, which is free of React Native and the DOM so it is
-tested bare: the tables are `Record<Union, true>` so a new member
-fails `tsc` before it fails a player, lookups are own-property only (`has`; `'constructor' in
-TABLE` is true on any plain object), and each field falls back to the default on its own,
-never the record as a whole. `src/settings.tsx` is the provider: it loads through the
-validator, merges a change made before the read came back under what was stored rather than
-over it, and `reset()` restores the settings record alone — the saved game is not a
-preference, and there is no first-run flag to keep (if one is added it belongs in this record
-and is the one field a reset preserves).
+player's unfinished battle through a migration for nothing, and
+`__tests__/settings-contract.test.ts` pins both strings, the field list, the row list and the
+enum tables as literals. The record is read only through `cleanSettings` in
+`src/validate.ts`, which is free of React Native and the DOM so it is tested bare: the tables
+are `Record<Union, true>` so a new member fails `tsc` before it fails a player, lookups are
+own-property only (`has`; `'constructor' in TABLE` is true on any plain object), and each
+field falls back to the default on its own, never the record as a whole. `src/settings.tsx`
+is the provider: it loads through the validator, merges a change made before the read came
+back under what was stored rather than over it, and sets the module flag in
+`src/ui/feedback.ts` that gates every haptic call. `reset()` restores the settings record
+alone — the saved game is not a preference, and there is no first-run flag to keep (if one is
+added it belongs in this record and is the one field a reset preserves).
+
+The screen (`src/ui/screens/SettingsScreen.tsx`, reached from the menu) has four rows:
+Vibration, Reduce motion, Reset to defaults and About. There is no Sound row because the app
+makes no sound, and no Theme row because it has one palette — `__tests__/appearance.test.ts`
+pins `userInterfaceStyle: "dark"` and says a theme row appears only with a second palette.
+Reduce motion resolves through `useReduceMotion` in `src/motion.ts`: `on`/`off` are the
+player's word, `system` asks `AccessibilityInfo` and follows `reduceMotionChanged`, a native
+call that rejects (no module behind it) means false, and on the web a page without
+`matchMedia` means false too, because react-native-web resolves *true* there. The only
+decorative motion is `SplashOverlay`, which holds its ripples still rather than dropping
+them: the splash is information. Anything that spends what the app cannot restore is
+confirmed through `confirmAction` in `src/confirm.ts` — `window.confirm` on the web,
+`Alert.alert` elsewhere — because react-native-web's `Alert.alert` is an empty static, and
+the "Start a new battle?" prompt was a silent no-op there: with a saved battle the start
+buttons did nothing at all. Reset is confirmed the same way. The About card's version is
+`Constants.expoConfig?.version` from `expo-constants` (a direct dependency since it is read
+here; nested under `expo/node_modules` it resolved only by accident), which is the `version`
+in `app.json`; the contract test keeps `package.json` in step with it. "Nothing leaves your
+device" is true: the app has no network code, and the source link is handed to the browser
+with `Linking.openURL`.
 
 ## Conventions
 

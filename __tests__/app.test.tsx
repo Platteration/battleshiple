@@ -217,6 +217,47 @@ describe('App', () => {
     });
   });
 
+  test('the skill control waits for the stored record rather than show Normal for a frame', async () => {
+    act(() => {
+      renderer.unmount();
+    });
+    await AsyncStorage.setItem('battleshiple.settings.v1', JSON.stringify({ difficulty: 'hard' }));
+    // Hold the settings read open; the savegame read goes through as usual.
+    // The store is already a jest.fn, so its implementation is swapped and
+    // put back by hand: a spy's mockRestore would strip it for good.
+    const getItem = AsyncStorage.getItem as jest.Mock;
+    const original = getItem.getMockImplementation()!;
+    let release: (raw: string | null) => void = () => {};
+    const held = new Promise<string | null>((resolve) => {
+      release = resolve;
+    });
+    getItem.mockImplementation((key: string) => (key === 'battleshiple.settings.v1' ? held : original(key)));
+    let fresh: ReactTestRenderer;
+    try {
+      await act(async () => {
+        fresh = create(<App />);
+      });
+      await flush();
+      // The rest of the menu is up; the control that would say Normal is not.
+      expect(hasText(fresh!.root, 'Play vs Computer')).toBe(true);
+      expect(hasText(fresh!.root, 'Computer skill')).toBe(false);
+      expect(hasText(fresh!.root, 'Hunts methodically')).toBe(false);
+
+      await act(async () => {
+        release(JSON.stringify({ difficulty: 'hard' }));
+      });
+      await flush();
+      expect(hasText(fresh!.root, 'Computer skill')).toBe(true);
+      expect(hasText(fresh!.root, 'Reads your splashes')).toBe(true);
+      expect(hasText(fresh!.root, 'Hunts methodically')).toBe(false);
+    } finally {
+      getItem.mockImplementation(original);
+      act(() => {
+        fresh!.unmount();
+      });
+    }
+  });
+
   test('a stored difficulty the engine has no profile for falls back rather than crashing the computer\'s turn', async () => {
     act(() => {
       renderer.unmount();

@@ -46,10 +46,17 @@ are `Record<Union, true>` so a new member fails `tsc` before it fails a player, 
 own-property only (`has`; `'constructor' in TABLE` is true on any plain object), and each
 field falls back to the default on its own, never the record as a whole. `src/settings.tsx`
 is the provider: it loads through the validator, merges a change made before the read came
-back under what was stored rather than over it, and sets the module flag in
-`src/ui/feedback.ts` that gates every haptic call. `reset()` restores the settings record
-alone — the saved game is not a preference, and there is no first-run flag to keep (if one is
-added it belongs in this record and is the one field a reset preserves).
+back under what was stored rather than over it, writes nothing until the read completes,
+and sets the module flag in `src/ui/feedback.ts` that gates every haptic call. `update()`
+decides whether to write, and writes, at the moment it is called — not inside the state
+updater, where React runs it: a second update outside an event is deferred to the render,
+and a read completing in between wrote the merged record and then had a stale one written
+over it. `__tests__/settings-provider.test.tsx` holds the read open and pins all three.
+The menu draws before the read completes, so `HomeScreen` renders the computer-skill
+control only once `loaded`, rather than show Normal for a frame to a player who chose
+otherwise. `reset()` restores the settings record alone — the saved game is not a
+preference, and there is no first-run flag to keep (if one is added it belongs in this record
+and is the one field a reset preserves).
 
 The screen (`src/ui/screens/SettingsScreen.tsx`, reached from the menu) has four rows:
 Vibration, Reduce motion, Reset to defaults and About. There is no Sound row because the app

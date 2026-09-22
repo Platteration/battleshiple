@@ -88,7 +88,7 @@ export default function App() {
 }
 
 function Game() {
-  const { settings, update } = useSettings();
+  const { settings, update, loaded } = useSettings();
   // The computer's skill is a preference: chosen on the menu, kept across launches.
   const difficulty = settings.difficulty;
   const setDifficulty = useCallback((d: Difficulty) => update({ difficulty: d }), [update]);
@@ -373,6 +373,7 @@ function Game() {
     <HomeScreen
       difficulty={difficulty}
       onDifficultyChange={setDifficulty}
+      loaded={loaded}
       onStart={startSetup}
       onSettings={() => setScreen({ name: 'settings' })}
       notice={notice ?? undefined}

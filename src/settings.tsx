@@ -23,11 +23,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 const KEY = STORAGE_KEYS.settings;
 
-interface SettingsContextValue {
+export interface SettingsContextValue {
   settings: AppSettings;
   update: (patch: Partial<AppSettings>) => void;
   /** Back to `DEFAULT_SETTINGS`. Touches the settings record only: the saved game is not a preference. */
   reset: () => void;
+  /** The stored record has been read. Until then `settings` is the defaults, and the menu holds its skill control. */
   loaded: boolean;
 }
 
@@ -47,6 +48,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // so the record on disk is never one with a field the player did not choose.
   const early = useRef<Partial<AppSettings>>({});
   const read = useRef(false);
+  // The settings as of the last call, kept beside the state so that `update`
+  // can decide and write at the moment it is called. Deciding inside the
+  // state updater put the write where React runs it — deferred to the render
+  // for a second update outside an event — and a read that completed in
+  // between wrote the merged record first and then had a stale one written
+  // over it.
+  const latest = useRef<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     let alive = true;
@@ -54,8 +62,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     // undefined on the computer's first turn.
     void loadJSON(KEY).then((stored) => {
       if (!alive) return;
-      read.current = true;
       const next = { ...cleanSettings(stored, DEFAULT_SETTINGS), ...early.current };
+      read.current = true;
+      latest.current = next;
       setSettings(next);
       setLoaded(true);
       if (Object.keys(early.current).length > 0) void saveJSON(KEY, next);
@@ -66,12 +75,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const update = useCallback((patch: Partial<AppSettings>) => {
-    if (!read.current) early.current = { ...early.current, ...patch };
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      if (read.current) void saveJSON(KEY, next);
-      return next;
-    });
+    const next = { ...latest.current, ...patch };
+    latest.current = next;
+    if (read.current) void saveJSON(KEY, next);
+    else early.current = { ...early.current, ...patch };
+    setSettings(next);
   }, []);
 
   // Nothing here records what the player has already seen: the app has no

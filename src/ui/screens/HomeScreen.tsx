@@ -9,6 +9,8 @@ import { colors, radius, shipColors, spacing } from '../theme';
 interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
+  /** The stored preferences have been read. The skill control waits for them rather than show Normal for a frame. */
+  loaded: boolean;
   onStart: (mode: GameMode) => void;
   onSettings: () => void;
   /** Present when something went wrong and the player is owed an explanation. */
@@ -29,7 +31,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, onSettings, notice, resume }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, loaded, onStart, onSettings, notice, resume }: Props) {
   const [showRules, setShowRules] = useState(false);
   return (
     <Screen>
@@ -53,8 +55,12 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, onSettings
         </View>
       )}
 
-      <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
-      <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
+      {loaded && (
+        <>
+          <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
+          <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
+        </>
+      )}
 
       <Button title="Play vs Computer" onPress={() => onStart('ai')} />
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />

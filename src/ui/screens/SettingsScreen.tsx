@@ -1,20 +1,13 @@
 import Constants from 'expo-constants';
 import React from 'react';
 import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../../about';
 import { confirmAction } from '../../confirm';
 import { ReduceMotionSetting, useSettings } from '../../settings';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
 import { colors, radius, spacing } from '../theme';
-
-export const APP_NAME = 'Battleshiple';
-export const SOURCE_URL = 'https://github.com/Platteration/battleshiple';
-
-/** The version app.json carries, which is what a build embeds. `0.0.0` only where nothing embedded one. */
-export function appVersion(): string {
-  return Constants.expoConfig?.version ?? '0.0.0';
-}
 
 /** The rows, in order, as the contract test pins them. */
 export const SETTINGS_ROWS = ['Vibration', 'Reduce motion', 'Reset to defaults', 'About'] as const;
@@ -73,15 +66,18 @@ export function SettingsScreen({ onBack }: Props) {
       <View style={styles.card}>
         <Text style={styles.h2}>About</Text>
         <Text style={styles.p}>
-          {APP_NAME} {appVersion()}
+          {APP_NAME} {appVersion(Constants.expoConfig?.version)}
         </Text>
-        <Text style={styles.p}>
-          Battleship where the fleets move: after every shot one ship may manoeuvre, and its opponent sees only a splash.
+        <Text style={styles.p}>{TAGLINE}</Text>
+        <Text
+          accessibilityRole="link"
+          // Handed to the browser; a device with nothing to open it rejects, which is nothing to us.
+          onPress={() => void Linking.openURL(SOURCE_URL).catch(() => undefined)}
+          style={styles.link}
+        >
+          {LICENCE} · source
         </Text>
-        <Text accessibilityRole="link" onPress={() => void Linking.openURL(SOURCE_URL)} style={styles.link}>
-          MIT licence · source
-        </Text>
-        <Text style={styles.p}>Nothing leaves your device.</Text>
+        <Text style={styles.p}>{PRIVACY}</Text>
       </View>
 
       <Button title="Back to menu" variant="secondary" onPress={onBack} />

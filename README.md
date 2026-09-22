@@ -171,6 +171,7 @@ src/storage.ts           autosave / resume on AsyncStorage, and every storage ke
 src/settings.tsx         preferences (vibration, reduce motion, computer skill)
 src/validate.ts          clamps the stored preferences to values the app knows
 src/motion.ts            reduce-motion resolution (setting, device, web)
+src/about.ts             what the About card says, free of React Native
 src/confirm.ts           a confirmation that works on the web as well as a device
 src/ui/                  React Native components and screens
 __tests__/               Jest suites

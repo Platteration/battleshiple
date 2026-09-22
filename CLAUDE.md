@@ -71,12 +71,19 @@ them: the splash is information. Anything that spends what the app cannot restor
 confirmed through `confirmAction` in `src/confirm.ts` — `window.confirm` on the web,
 `Alert.alert` elsewhere — because react-native-web's `Alert.alert` is an empty static, and
 the "Start a new battle?" prompt was a silent no-op there: with a saved battle the start
-buttons did nothing at all. Reset is confirmed the same way. The About card's version is
-`Constants.expoConfig?.version` from `expo-constants` (a direct dependency since it is read
-here; nested under `expo/node_modules` it resolved only by accident), which is the `version`
-in `app.json`; the contract test keeps `package.json` in step with it. "Nothing leaves your
-device" is true: the app has no network code, and the source link is handed to the browser
-with `Linking.openURL`.
+buttons did nothing at all. Reset is confirmed the same way. The About card's text lives in
+`src/about.ts`, free of React Native and pinned by the contract test; its version is
+`appVersion(Constants.expoConfig?.version)` — `expo-constants` is a direct dependency since it
+is read here (nested under `expo/node_modules` it resolved only by accident) and the value is
+the `version` in `app.json`, which the contract test keeps `package.json` in step with.
+"Nothing leaves your device" is true and `appConfig.test.ts` keeps it so: it scans `src/`,
+`App.tsx` and `index.ts` for `fetch`, `XMLHttpRequest`, `WebSocket`, `expo-updates` and any
+URL but `SOURCE_URL`, and pins `Linking.openURL(SOURCE_URL)` — handed to the browser with a
+`.catch`, since Android rejects when nothing answers the intent — as the only `openURL` in the
+tree. On the board, the locked target cell is exposed as `selected`, so a screen reader is
+told which cell FIRE will act on; the game tabs are a `tablist`, and the shared `Segmented`
+is a named `radiogroup`. `__tests__/splash.test.tsx` pins that reduce motion holds the
+ripples rather than hiding them.
 
 ## Conventions
 

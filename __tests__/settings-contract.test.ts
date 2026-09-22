@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../src/about';
 import { DEFAULT_SETTINGS } from '../src/settings';
 import { STORAGE_KEYS } from '../src/storage';
 import { SETTINGS_ROWS } from '../src/ui/screens/SettingsScreen';
@@ -40,6 +41,20 @@ describe('settings contract', () => {
   it('accepts exactly these enum values', () => {
     expect(Object.keys(REDUCE_MOTION)).toEqual(['system', 'on', 'off']);
     expect(Object.keys(DIFFICULTIES)).toEqual(['easy', 'normal', 'hard']);
+  });
+
+  it('says on the About card what is true, from a module free of React Native', () => {
+    expect(APP_NAME).toBe('Battleshiple');
+    expect(TAGLINE).toContain('fleets move');
+    expect(LICENCE).toBe('MIT licence');
+    expect(SOURCE_URL).toBe('https://github.com/Platteration/battleshiple');
+    // Backed by appConfig.test.ts, which scans the source for network code.
+    expect(PRIVACY).toBe('Nothing leaves your device.');
+    // A missing or empty configured version reads as a placeholder, never "undefined".
+    expect(appVersion('1.0.0')).toBe('1.0.0');
+    expect(appVersion(undefined)).toBe('0.0.0');
+    expect(appVersion('')).toBe('0.0.0');
+    expect(appVersion(7)).toBe('0.0.0');
   });
 
   it('shows the version app.json carries, and package.json agrees with it', () => {

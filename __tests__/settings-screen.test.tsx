@@ -3,10 +3,11 @@ import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { Alert, Linking, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import { SOURCE_URL } from '../src/about';
 import { SettingsProvider } from '../src/settings';
 import { STORAGE_KEYS } from '../src/storage';
 import { feedback } from '../src/ui/feedback';
-import { SETTINGS_ROWS, SOURCE_URL, SettingsScreen } from '../src/ui/screens/SettingsScreen';
+import { SETTINGS_ROWS, SettingsScreen } from '../src/ui/screens/SettingsScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -67,6 +68,8 @@ describe('SettingsScreen', () => {
     await AsyncStorage.clear();
     await AsyncStorage.setItem(STORAGE_KEYS.savegame, SAVE);
     onBack.mockClear();
+    // React Native's jest mock of openURL is a bare jest.fn(); the real one returns a promise.
+    (Linking.openURL as jest.Mock).mockResolvedValue(undefined);
     await act(async () => {
       renderer = create(
         <SettingsProvider>
@@ -159,6 +162,23 @@ describe('SettingsScreen', () => {
     act(() => link.props.onPress());
     expect(Linking.openURL).toHaveBeenCalledWith(SOURCE_URL);
     expect(SOURCE_URL).toMatch(/^https:\/\/github\.com\//);
+  });
+
+  test('a link the device cannot open is nothing, not an unhandled rejection', async () => {
+    // Android rejects openURL when no activity answers the intent. Unhandled,
+    // that is a LogBox in development and a silent rejection in release.
+    const unhandled = jest.fn();
+    process.on('unhandledRejection', unhandled);
+    (Linking.openURL as jest.Mock).mockRejectedValueOnce(new Error('No Activity found to handle Intent'));
+    try {
+      const link = findByText(renderer.root, 'MIT licence');
+      expect(() => link.props.onPress()).not.toThrow();
+      await flush();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
   });
 
   test('Back to menu goes back', () => {

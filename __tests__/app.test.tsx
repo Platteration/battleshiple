@@ -186,6 +186,53 @@ describe('App', () => {
     expect(hasText(root, 'End turn')).toBe(true);
   });
 
+  test('the setup chips, board cells, tabs and fleet cards carry roles and states for a screen reader', () => {
+    const root = renderer.root;
+    // A Pressable and the Views it renders all carry the props; the outermost node of each is counted once.
+    const outer = (nodes: ReactTestInstance[]) =>
+      nodes.filter(
+        (n) =>
+          !n.parent ||
+          n.parent.props.accessibilityRole !== n.props.accessibilityRole ||
+          n.parent.props.accessibilityLabel !== n.props.accessibilityLabel,
+      );
+    const labelled = (re: RegExp) => outer(root.findAll((n) => re.test(String(n.props.accessibilityLabel))));
+    const selectedOf = (nodes: ReactTestInstance[]) => nodes.filter((n) => n.props.accessibilityState?.selected === true);
+
+    pressText(root, 'Play vs Computer');
+    const chips = labelled(/, (placed|not placed)$/);
+    expect(chips).toHaveLength(5);
+    for (const chip of chips) expect(chip.props.accessibilityRole).toBe('button');
+    expect(selectedOf(chips)).toHaveLength(1);
+
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    expect(root.findAll((n) => n.props.accessibilityRole === 'tablist').length).toBeGreaterThan(0);
+    let tabs = outer(root.findAll((n) => n.props.accessibilityRole === 'tab'));
+    expect(tabs).toHaveLength(2);
+    expect(tabs.map((t) => t.props.accessibilityState.selected)).toEqual([true, false]);
+
+    const cells = labelled(/^[A-J](10|[1-9])$/);
+    expect(cells).toHaveLength(100);
+    for (const cell of cells) expect(cell.props.accessibilityRole).toBe('button');
+    expect(selectedOf(cells)).toHaveLength(0);
+    // The locked target is the one cell FIRE will act on.
+    pressCell(root, 'E5');
+    const locked = selectedOf(labelled(/^[A-J](10|[1-9])$/));
+    expect(locked.map((n) => n.props.accessibilityLabel)).toEqual(['E5']);
+
+    pressText(root, 'FIRE at E5');
+    // The manoeuvre phase switches to the fleet tab, whose cards are pressable.
+    tabs = outer(root.findAll((n) => n.props.accessibilityRole === 'tab'));
+    expect(tabs.map((t) => t.props.accessibilityState.selected)).toEqual([false, true]);
+    const cards = labelled(/, (ready|sunk|ready in \d+)$/);
+    expect(cards).toHaveLength(5);
+    for (const card of cards) expect(card.props.accessibilityRole).toBe('button');
+    expect(selectedOf(cards)).toHaveLength(0);
+    pressText(root, 'Patrol Boat');
+    expect(selectedOf(labelled(/, (ready|sunk|ready in \d+)$/)).map((n) => n.props.accessibilityLabel)).toEqual(['Patrol Boat, ready']);
+  });
+
   test('difficulty can be chosen and describes itself', () => {
     const root = renderer.root;
     expect(hasText(root, 'Hunts methodically')).toBe(true);

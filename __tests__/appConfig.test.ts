@@ -11,6 +11,7 @@ import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { SOURCE_URL } from '../src/about';
 
 const root = path.join(__dirname, '..');
 const appConfig = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo;
@@ -61,6 +62,24 @@ const manifestsUnder = (dir: string): string[] => {
     else if (entry.isFile() && entry.name === 'AndroidManifest.xml') out.push(full);
   }
   return out;
+};
+
+/** The app's own code: everything under src/ that is not a test, plus the entry files. */
+const appSource = (): string => {
+  const sources: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walk(full);
+      } else if (/\.tsx?$/.test(entry.name)) {
+        sources.push(fs.readFileSync(full, 'utf8'));
+      }
+    }
+  };
+  walk(path.join(root, 'src'));
+  for (const file of ['App.tsx', 'index.ts']) sources.push(fs.readFileSync(path.join(root, file), 'utf8'));
+  return sources.join('\n');
 };
 
 type PluginEntry = string | [string, Record<string, unknown>?];
@@ -141,8 +160,11 @@ describe('appearance', () => {
     expect(appConfig.android).not.toHaveProperty('edgeToEdgeEnabled');
   });
 
-  it('opens a URL nowhere, so registers no scheme', () => {
+  it('registers no URL scheme, and nothing links in', () => {
+    // The About card hands one URL out (checked under 'what leaves the
+    // device'); nothing reads one in, so there is no scheme to answer to.
     expect(appConfig).not.toHaveProperty('scheme');
+    expect(appSource()).not.toMatch(/getInitialURL|addEventListener\(\s*['"]url['"]|expo-linking|useURL\(/);
   });
 
   it('ships all three adaptive icon layers', () => {
@@ -240,17 +262,29 @@ describe('permissions requested by the config plugins', () => {
 
 describe('what leaves the device', () => {
   it('does not ship network access', () => {
-    // The app has no network code (nothing in src/ or App.tsx calls fetch or
-    // opens a socket; the About card hands one URL to the browser with
-    // Linking.openURL, which is the browser's network, not the app's);
-    // INTERNET in the shipped manifest is what turns
-    // a malicious dependency or in-process code execution from 'reads the
-    // save' into 'sends it somewhere'. The template and expo-file-system both
-    // declare it, so it has to be blocked rather than merely not asked for.
+    // The app has no network code (the test below checks the source for it);
+    // INTERNET in the shipped manifest is what turns a malicious dependency
+    // or in-process code execution from 'reads the save' into 'sends it
+    // somewhere'. The template and expo-file-system both declare it, so it
+    // has to be blocked rather than merely not asked for.
     expect(appConfig.android.blockedPermissions).toContain(INTERNET);
     const internet = usesPermission(INTERNET);
     expect(internet).toBeDefined(); // it is in the merge, and being removed
     expect(internet.$['tools:node']).toBe('remove');
+  });
+
+  it('has no network code, which is why INTERNET can go', () => {
+    // The reason for the block, checked against the source rather than
+    // assumed. The About card hands the repository URL to the system
+    // browser: another process with its own permission, opening no socket of
+    // this app's own. So the only URL in the source is that one, and the only
+    // thing it is handed to is Linking.openURL - which is also what keeps
+    // "Nothing leaves your device" on that card true.
+    const source = appSource();
+    expect(source).not.toMatch(/\bfetch\(|axios|XMLHttpRequest|WebSocket|openBrowserAsync|expo-updates/);
+    const urls = [...source.matchAll(/https?:\/\/[^\s'"`)]+/g)].map((m) => m[0]);
+    expect([...new Set(urls)]).toEqual([SOURCE_URL]);
+    expect(source.match(/\bopenURL\([^)]*\)/g)).toEqual(['openURL(SOURCE_URL)']);
   });
 
   it('gives a development build the network back, in the debug source set only', async () => {

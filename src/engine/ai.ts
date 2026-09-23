@@ -140,8 +140,9 @@ export function aiChooseShot(
     // work has to be bounded by the board (at most BOARD_SIZE * BOARD_SIZE
     // cells) rather than by the length of a history we did not necessarily play.
     const hot = [...latestByCell(recentHits).values()].sort((a, b) => b.turn - a.turn);
+    const latest = hot[0];
 
-    if (hot.length > 0) {
+    if (latest) {
       const candidates: Coord[] = [];
       // Extend the line through any two adjacent hits – that is the hull's axis.
       for (const a of hot) {
@@ -156,7 +157,6 @@ export function aiChooseShot(
         }
       }
       if (candidates.length === 0) {
-        const latest = hot[0];
         for (const n of [
           { r: latest.r - 1, c: latest.c },
           { r: latest.r + 1, c: latest.c },

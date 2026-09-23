@@ -36,8 +36,9 @@ function findByText(root: ReactTestInstance, text: string): ReactTestInstance {
   const matches = root.findAll(
     (n) => String(n.type) === 'Text' && n.children.length > 0 && n.children.map((c) => String(c)).join('').includes(text),
   );
-  if (matches.length === 0) throw new Error(`No text node containing "${text}"`);
-  return matches[0];
+  const [first] = matches;
+  if (!first) throw new Error(`No text node containing "${text}"`);
+  return first;
 }
 
 function pressText(root: ReactTestInstance, text: string) {
@@ -134,14 +135,14 @@ describe('SettingsScreen', () => {
     try {
       pressText(renderer.root, 'Reset to defaults');
       expect(alert).toHaveBeenCalledTimes(1);
-      const buttons = alert.mock.calls[0][2] as { text: string; style?: string; onPress?: () => void }[];
+      const buttons = alert.mock.calls[0]![2] as { text: string; style?: string; onPress?: () => void }[];
       expect(buttons.map((b) => [b.text, b.style])).toEqual([
         ['Cancel', 'cancel'],
         ['Reset', 'destructive'],
       ]);
       // Nothing has happened yet.
       expect(await stored()).toEqual({ haptics: false, reduceMotion: 'off', difficulty: 'normal' });
-      act(() => buttons[1].onPress!());
+      act(() => buttons[1]!.onPress!());
       await flush();
     } finally {
       alert.mockRestore();

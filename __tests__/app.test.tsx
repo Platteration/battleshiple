@@ -44,8 +44,9 @@ function findByText(root: ReactTestInstance, text: string): ReactTestInstance {
   const matches = root.findAll(
     (n) => String(n.type) === 'Text' && n.children.length > 0 && n.children.map((c) => String(c)).join('').includes(text),
   );
-  if (matches.length === 0) throw new Error(`No text node containing "${text}"`);
-  return matches[0];
+  const [first] = matches;
+  if (!first) throw new Error(`No text node containing "${text}"`);
+  return first;
 }
 
 function hasText(root: ReactTestInstance, text: string): boolean {
@@ -409,7 +410,7 @@ describe('App', () => {
       expect(hasText(root, 'deploy your fleet')).toBe(false);
       expect(hasText(root, 'Unfinished battle')).toBe(true);
 
-      const buttons = (alert.mock.calls[0][2] ?? []) as { text: string; onPress?: () => void }[];
+      const buttons = (alert.mock.calls[0]![2] ?? []) as { text: string; onPress?: () => void }[];
       expect(buttons.map((b) => b.text)).toContain('Cancel');
       const confirm = buttons.find((b) => b.text === 'Discard and start');
       expect(confirm?.onPress).toBeDefined();
@@ -554,7 +555,7 @@ describe('App', () => {
       // The failure left a trace: 'it goes back to the menu sometimes' is not a
       // bug report anyone can act on.
       expect(logged).toHaveBeenCalled();
-      expect(String(logged.mock.calls[0][1])).toContain('the state could not be played');
+      expect(String(logged.mock.calls[0]![1])).toContain('the state could not be played');
     } finally {
       logged.mockRestore();
     }

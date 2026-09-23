@@ -215,7 +215,7 @@ describe('storage', () => {
       let g = game();
       g = fire(g, { r: 8, c: 1 }).state;
       g = maneuver(g, 'patrol', { kind: 'ahead', distance: 1 });
-      const longest = g.log.map((e) => e.text).sort((a, b) => b.length - a.length)[0];
+      const longest = g.log.map((e) => e.text).sort((a, b) => b.length - a.length)[0]!;
       expect(longest.length).toBeGreaterThan(40);
       await expectAccepted((p) => (p.state.log = [{ turn: 0, by: 0, kind: 'move', text: longest }]));
     });
@@ -266,8 +266,8 @@ describe('storage', () => {
     test('a shot history no game could fire keeps the most recent 2000', async () => {
       const loaded = await loadAfter((p) => (p.state.players[1].shots = Array.from({ length: 20000 }, (_, i) => shot(i))));
       expect(loaded!.state.players[1].shots).toHaveLength(2000);
-      expect(loaded!.state.players[1].shots[1999].turn).toBe(19999);
-      expect(loaded!.state.players[1].shots[0].turn).toBe(18000);
+      expect(loaded!.state.players[1].shots[1999]!.turn).toBe(19999);
+      expect(loaded!.state.players[1].shots[0]!.turn).toBe(18000);
       // ...and the match itself survives: the save is still on the disk.
       expect(await AsyncStorage.getItem(KEY)).not.toBeNull();
     });

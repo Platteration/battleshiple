@@ -92,7 +92,7 @@ describe('SettingsProvider with the read still open', () => {
     // From here every change is written as it is made.
     act(() => api.update({ haptics: true }));
     expect(writes()).toHaveLength(2);
-    expect(writes()[1].record).toEqual({ ...STORED, difficulty: 'easy', haptics: true });
+    expect(writes()[1]!.record).toEqual({ ...STORED, difficulty: 'easy', haptics: true });
   });
 
   test('two changes outside an event, with the read completing before React renders, still write once', async () => {

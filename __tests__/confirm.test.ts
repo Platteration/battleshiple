@@ -40,7 +40,7 @@ describe('confirmAction', () => {
     expect(alert).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
     // ...and nothing was ever going to: the stub keeps no buttons to press.
-    expect(alert.mock.results[0].value).toBeUndefined();
+    expect(alert.mock.results[0]!.value).toBeUndefined();
   });
 
   test("on the web it asks the browser, and the answer decides", () => {
@@ -71,9 +71,9 @@ describe('confirmAction', () => {
       ['Cancel', 'cancel'],
       ['Discard and start', 'destructive'],
     ]);
-    expect(buttons[0].onPress).toBeUndefined();
+    expect(buttons[0]!.onPress).toBeUndefined();
     expect(onConfirm).not.toHaveBeenCalled();
-    buttons[1].onPress!();
+    buttons[1]!.onPress!();
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 });

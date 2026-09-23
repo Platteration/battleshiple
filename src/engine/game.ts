@@ -95,7 +95,8 @@ export function fire(state: GameState, coord: Coord): { state: GameState; result
 
   if (found) {
     const { ship, segment } = found;
-    const alreadyDamaged = ship.hits[segment];
+    // `segment` indexes cellsOf(ship), and a hull carries one `hits` entry per cell.
+    const alreadyDamaged = ship.hits[segment]!;
     const hits = [...ship.hits];
     hits[segment] = true;
     const updated: Ship = { ...ship, hits };
@@ -151,8 +152,9 @@ export function maneuver(state: GameState, shipId: string, m: Maneuver): GameSta
   let next = withPlayer(state, me, { ships });
 
   // The opponent sees a splash in the quadrant where the ship now sits (its midpoint).
+  // Every class in SHIP_CLASSES is at least two cells long, so the midpoint exists.
   const cells = cellsOf(moved);
-  const mid = cells[Math.floor((cells.length - 1) / 2)];
+  const mid = cells[Math.floor((cells.length - 1) / 2)]!;
   const quadrant = quadrantOf(mid);
   const enemy = opponentOf(me);
   next = withPlayer(next, enemy, {

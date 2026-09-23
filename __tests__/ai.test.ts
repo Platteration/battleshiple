@@ -33,8 +33,8 @@ describe('ai', () => {
     const rng = seededRng(9);
     let g = createGame({ mode: 'ai', names: ['A', 'AI'], fleets: [randomFleet(rng), randomFleet(rng)], aiPlayer: 1 });
     g = endTurn(fire(g, { r: 9, c: 9 }).state);
-    // Force a hit for the AI on one of A's ships.
-    const target = g.players[0].ships[0];
+    // Force a hit for the AI on one of A's ships (randomFleet deals the whole FLEET).
+    const target = g.players[0].ships[0]!;
     const res = fire(g, target.bow);
     expect(res.result.result).toBe('hit');
     g = endTurn(res.state);
@@ -47,7 +47,7 @@ describe('ai', () => {
   test('ai moves a damaged ship when it can', () => {
     const rng = seededRng(3);
     let g = createGame({ mode: 'ai', names: ['A', 'AI'], fleets: [randomFleet(rng), randomFleet(rng)], aiPlayer: 1 });
-    const victim = g.players[1].ships[4]; // patrol boat
+    const victim = g.players[1].ships[4]!; // patrol boat: randomFleet deals FLEET in order
     g = endTurn(fire(g, victim.bow).state);
     g = fire(g, { r: 9, c: 9 }).state;
     const choice = aiChooseManeuver(g, 1, rng);

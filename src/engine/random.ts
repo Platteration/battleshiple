@@ -16,8 +16,11 @@ export function randomInt(rng: Rng, maxExclusive: number): number {
   return Math.floor(rng() * maxExclusive);
 }
 
+/** A uniformly chosen element. An empty list has none to give, so it throws rather than hand back undefined. */
 export function pick<T>(rng: Rng, items: readonly T[]): T {
-  return items[randomInt(rng, items.length)];
+  if (items.length === 0) throw new RangeError('pick: the list is empty');
+  // An Rng answers in [0, 1), so the index is in [0, items.length).
+  return items[randomInt(rng, items.length)]!;
 }
 
 export const defaultRng: Rng = () => Math.random();

@@ -153,7 +153,8 @@ npm run check              # all of the above: the gate before a push
 ```
 
 CI runs the same steps one at a time, then bundles the app for Android with
-`expo export`.
+`expo export`; a separate job runs `npm audit --omit=dev --audit-level=high`
+against the lockfile.
 
 ## Project layout
 

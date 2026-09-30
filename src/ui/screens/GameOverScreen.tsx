@@ -18,6 +18,14 @@ function stats(state: GameState, index: PlayerIndex) {
   return { shots: p.shots.length, hits, moves, remaining: shipsRemaining(p.ships) };
 }
 
+/**
+ * The human player in vs-Computer mode is literally named "You", which made the
+ * plain template read "You wins!".
+ */
+export function winLine(name: string): string {
+  return name === 'You' ? 'You win!' : `${name} wins!`;
+}
+
 export function GameOverScreen({ state, onRematch, onHome }: Props) {
   const styles = useStyles();
   const winner = state.winner ?? 0;
@@ -27,7 +35,7 @@ export function GameOverScreen({ state, onRematch, onHome }: Props) {
     <Screen>
       <View style={styles.hero}>
         <Text style={styles.eyebrow}>{state.mode === 'ai' ? (humanWonVsAi ? 'Victory' : 'Defeat') : 'Game over'}</Text>
-        <Text style={styles.title}>{winnerName} wins!</Text>
+        <Text style={styles.title}>{winLine(winnerName)}</Text>
         <Text style={styles.sub}>Turn {Math.floor(state.turn / 2) + 1}</Text>
       </View>
       <View style={styles.table}>

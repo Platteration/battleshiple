@@ -4,22 +4,22 @@ import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
-import { Lamp, makeStyles, radius, spacing, useTheme } from '../theme';
+import { Appearance, makeStyles, radius, spacing, useTheme } from '../theme';
 
 interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
-  lamp: Lamp;
-  onLampChange: (lamp: Lamp) => void;
+  appearance: Appearance;
+  onAppearanceChange: (appearance: Appearance) => void;
   onStart: (mode: GameMode) => void;
   /** Present when an unfinished game is on disk. */
   resume?: { label: string; onResume: () => void; onDiscard: () => void };
 }
 
-const LAMPS: { value: Lamp; label: string }[] = [
+const APPEARANCES: { value: Appearance; label: string }[] = [
   { value: 'auto', label: 'Auto' },
-  { value: 'day', label: 'Day' },
-  { value: 'night', label: 'Night' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
 ];
 
 const DIFFICULTIES: { value: Difficulty; label: string }[] = [
@@ -34,7 +34,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, lamp, onLampChange }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, appearance, onAppearanceChange }: Props) {
   const styles = useStyles();
   const { palette: p } = useTheme();
   const [showRules, setShowRules] = useState(false);
@@ -61,7 +61,7 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, la
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />
       <Button title={showRules ? 'Hide rules' : 'How to play'} variant="ghost" onPress={() => setShowRules((v) => !v)} />
 
-      <Segmented label="Plotting lamp" options={LAMPS} value={lamp} onChange={onLampChange} />
+      <Segmented label="Appearance" options={APPEARANCES} value={appearance} onChange={onAppearanceChange} />
 
       {showRules && (
         <View style={styles.rules}>

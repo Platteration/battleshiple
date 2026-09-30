@@ -1,26 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Lamp } from './ui/theme';
+import { safeParse } from './storage';
+import type { Appearance } from './ui/theme';
 
 const KEY = 'battleshiple:settings:v1';
 
 export interface Settings {
-  /** Plotting-room lighting: follow the device, or force day or night. */
-  lamp: Lamp;
+  /** Follow the device, or force light or dark. */
+  appearance: Appearance;
 }
 
-export const DEFAULT_SETTINGS: Settings = { lamp: 'auto' };
+export const DEFAULT_SETTINGS: Settings = { appearance: 'auto' };
 
 interface SavedSettings {
   version: 1;
   settings: Settings;
 }
 
-const LAMPS: readonly Lamp[] = ['auto', 'day', 'night'];
+const APPEARANCES: readonly Appearance[] = ['auto', 'light', 'dark'];
 
 function isValid(value: unknown): value is SavedSettings {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Partial<SavedSettings>;
-  return v.version === 1 && typeof v.settings === 'object' && v.settings !== null && LAMPS.includes(v.settings.lamp);
+  return v.version === 1 && typeof v.settings === 'object' && v.settings !== null && APPEARANCES.includes(v.settings.appearance);
 }
 
 /**
@@ -32,7 +33,9 @@ export async function loadSettings(): Promise<Settings> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed: unknown = JSON.parse(raw);
+    // Same prototype-key filtering as saved games: the app wrote this blob
+    // itself, so this is consistency, not a defence against a known threat.
+    const parsed: unknown = safeParse(raw);
     if (!isValid(parsed)) {
       await AsyncStorage.removeItem(KEY).catch(() => undefined);
       return DEFAULT_SETTINGS;

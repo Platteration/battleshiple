@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { contrast, day, getTheme, GRAPHIC_MIN, night, Palette, resolveLamp, TEXT_MIN } from '../src/ui/theme';
+import { contrast, dark, getTheme, GRAPHIC_MIN, light, Palette, resolveAppearance, TEXT_MIN, typeScale } from '../src/ui/theme';
 
 const ROOT = join(__dirname, '..');
 
@@ -37,39 +37,33 @@ describe('theme discipline', () => {
 });
 
 describe('theme objects', () => {
-  test('one stable theme per (palette, fonts), so style caches can key on identity', () => {
-    expect(getTheme('day')).toBe(getTheme('day'));
-    expect(getTheme('day', true)).toBe(getTheme('day', true));
-    expect(getTheme('day', true)).not.toBe(getTheme('day', false));
-    expect(getTheme('night').palette).toBe(night);
-    expect(Object.isFrozen(getTheme('day'))).toBe(true);
+  test('one stable theme per palette, so style caches can key on identity', () => {
+    expect(getTheme('light')).toBe(getTheme('light'));
+    expect(getTheme('dark')).toBe(getTheme('dark'));
+    expect(getTheme('dark').palette).toBe(dark);
+    expect(Object.isFrozen(getTheme('light'))).toBe(true);
   });
 
-  test('type falls back to system weights until fonts load, then uses per-weight families', () => {
-    const before = getTheme('day', false).type;
-    const after = getTheme('day', true).type;
-    expect(before.display.fontFamily).toBeUndefined();
-    expect(before.display.fontWeight).toBeDefined();
-    // Android does not synthesise weight on a custom face, so a loaded family
-    // must carry its weight in its name and set no fontWeight.
-    expect(after.display.fontFamily).toBe('Stencil-Bold');
-    expect(after.display.fontWeight).toBeUndefined();
-    expect(after.teletype.fontFamily).toBe('Mono-Regular');
+  test('text stays in the platform sans-serif, as VISUAL_STYLE.md requires', () => {
+    // Weight establishes hierarchy; no style in the scale may name a typeface.
+    for (const [role, style] of Object.entries(typeScale)) {
+      expect({ role, fontFamily: style.fontFamily }).toEqual({ role, fontFamily: undefined });
+    }
   });
 
-  test('the lamp follows the device only when set to auto', () => {
-    expect(resolveLamp('auto', 'dark')).toBe('night');
-    expect(resolveLamp('auto', 'light')).toBe('day');
-    expect(resolveLamp('auto', null)).toBe('day');
-    expect(resolveLamp('day', 'dark')).toBe('day');
-    expect(resolveLamp('night', 'light')).toBe('night');
+  test('appearance follows the device only when set to auto', () => {
+    expect(resolveAppearance('auto', 'dark')).toBe('dark');
+    expect(resolveAppearance('auto', 'light')).toBe('light');
+    expect(resolveAppearance('auto', null)).toBe('light');
+    expect(resolveAppearance('light', 'dark')).toBe('light');
+    expect(resolveAppearance('dark', 'light')).toBe('dark');
   });
 });
 
 /**
  * Every pairing the UI actually draws, with the WCAG floor it must clear:
- * 4.5:1 for text, 3:1 for marks, lines and outlines. Checked in both
- * palettes, because night mode is red-monochrome and easy to get wrong.
+ * 4.5:1 for text, 3:1 for marks, lines and outlines — and, per AGENTS.md
+ * section 6, a piece must be distinguishable from the board it sits on.
  */
 function pairings(p: Palette): [string, string, string, number][] {
   const rows: [string, string, string, number][] = [
@@ -98,16 +92,18 @@ function pairings(p: Palette): [string, string, string, number][] {
     ['illegal preview outline', p.preview.badStroke, p.board.water, GRAPHIC_MIN],
     ['token outline on water', p.token.stroke, p.board.water, GRAPHIC_MIN],
   ];
-  for (const [cls, fill] of Object.entries(p.token.fill)) {
-    rows.push([`token outline on ${cls}`, p.token.stroke, fill, GRAPHIC_MIN]);
-    rows.push([`token detail on ${cls}`, p.token.mark, fill, GRAPHIC_MIN]);
+  // The crisp outline is what separates a piece from the board ('token
+  // outline on water' above); the fill sits inside it. What must read on the
+  // fill itself is the detail drawn there: the bow marker.
+  for (const cls of Object.keys(p.token.fill) as (keyof Palette['token']['fill'])[]) {
+    rows.push([`bow marker on ${cls}`, p.token.mark[cls], p.token.fill[cls], GRAPHIC_MIN]);
   }
   return rows;
 }
 
 describe.each([
-  ['day', day],
-  ['night', night],
+  ['light', light],
+  ['dark', dark],
 ])('%s palette contrast', (_name, palette) => {
   test.each(pairings(palette))('%s', (_label, fg, bg, min) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(min);
@@ -118,7 +114,7 @@ describe('contrast helper', () => {
   test('matches known WCAG values', () => {
     expect(contrast('#000000', '#ffffff')).toBeCloseTo(21, 5);
     expect(contrast('#ffffff', '#ffffff')).toBeCloseTo(1, 5);
-    expect(contrast('#1B2A41', '#EFE6D2')).toBeCloseTo(11.64, 1);
+    expect(contrast('#19232d', '#f5f0e6')).toBeCloseTo(14.3, 0);
   });
 
   test('refuses translucent colours rather than guessing', () => {

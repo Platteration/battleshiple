@@ -121,6 +121,20 @@ median of the earlier kills at both normal and hard, because a small, mobile,
 undamaged ship on an open board is the hardest thing in the game to corner.
 Shrinking the board, or raising the size of the *smallest* ship, are the levers.
 
+## Look
+
+Battleshiple follows the shared illustrated-tabletop language in
+[VISUAL_STYLE.md](VISUAL_STYLE.md): warm ivory or deep ink behind opaque
+panels, muted sea-glass and amber accents, the platform sans-serif, and shallow
+depth — a crisp outline, a short lower edge and a small upper-left highlight on
+each hull. The Appearance setting on the home screen picks Light, Dark, or Auto
+(follow the device).
+
+Colours live in semantic roles in `src/ui/theme/`, never in components; a test
+fails if a colour literal appears anywhere else. Every pairing the UI draws is
+checked against WCAG — 4.5:1 for text, 3:1 for marks, lines and outlines — in
+both appearances, and ship hulls must stand out from the water they sit on.
+
 ## Running the app
 
 Requires Node 22 and the Expo tooling.
@@ -163,20 +177,23 @@ npm test            # Jest: 55 tests, engine + UI
 ### Seeing the UI
 
 There is no simulator in most automated environments, so `tools/screenshots.js`
-drives the web build in Chromium and captures each screen, failing on any console
-error. Playwright is deliberately not a repo dependency, to keep CI from pulling
-browser binaries.
+drives the web build in Chromium. Each run covers three phone sizes (390x844,
+360x640, 430x932) in light and dark, with and without reduced motion, and reaches
+the game-over screen by resuming a planted near-finished save. It seeds
+`Math.random`, so runs are repeatable, and fails on any console error. Playwright
+is deliberately not a repo dependency, to keep CI from pulling browser binaries.
 
 ```bash
 npm i -D playwright
 npx expo export --platform web --output-dir /tmp/web
 (cd /tmp/web && python3 -m http.server 8099 &)
-node tools/screenshots.js /tmp/shots
+node tools/screenshots.js /tmp/shots              # full matrix
+python3 tools/pngdiff.py /tmp/before /tmp/after   # prove a refactor changed nothing
 ```
 
-This found a manoeuvre preview tinted the same green as the Destroyer's hull, a
-Confirm button that fell below the fold on a 390x844 phone, and a log line that
-read "You's Patrol Boat" — none of which any unit test would have noticed.
+It has found a manoeuvre preview tinted the same green as the Destroyer, a
+Confirm button below the fold, and two player-name bugs — "You's Patrol Boat"
+and "You wins!" — none of which a unit test would have noticed.
 
 ### Regenerating the icons
 
@@ -200,7 +217,10 @@ src/engine/              pure TypeScript rules, no React
   game.ts                fire, manoeuvre, end turn, splashes, win detection
   ai.ts                  computer opponent and difficulty profiles
 src/storage.ts           autosave / resume on AsyncStorage
+src/settings.ts          appearance preference
+src/ui/theme/            palettes, type scale, contrast checks, ThemeProvider
 src/ui/                  React Native components and screens
+tools/                   simulation, screenshots, icon generator, PNG diff
 __tests__/               Jest suites
 ```
 

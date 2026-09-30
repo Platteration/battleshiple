@@ -12,21 +12,21 @@ describe('settings', () => {
     await AsyncStorage.clear();
   });
 
-  test('defaults to following the device lamp', async () => {
-    expect(await loadSettings()).toEqual({ lamp: 'auto' });
-    expect(DEFAULT_SETTINGS.lamp).toBe('auto');
+  test('defaults to following the device appearance', async () => {
+    expect(await loadSettings()).toEqual({ appearance: 'auto' });
+    expect(DEFAULT_SETTINGS.appearance).toBe('auto');
   });
 
-  test('round-trips a lamp choice', async () => {
-    await saveSettings({ lamp: 'night' });
-    expect(await loadSettings()).toEqual({ lamp: 'night' });
+  test('round-trips an appearance choice', async () => {
+    await saveSettings({ appearance: 'dark' });
+    expect(await loadSettings()).toEqual({ appearance: 'dark' });
   });
 
   test('a corrupt or unknown entry falls back to defaults and is discarded', async () => {
     await AsyncStorage.setItem(KEY, 'not json');
     expect(await loadSettings()).toEqual(DEFAULT_SETTINGS);
 
-    await AsyncStorage.setItem(KEY, JSON.stringify({ version: 1, settings: { lamp: 'disco' } }));
+    await AsyncStorage.setItem(KEY, JSON.stringify({ version: 1, settings: { appearance: 'disco' } }));
     expect(await loadSettings()).toEqual(DEFAULT_SETTINGS);
     expect(await AsyncStorage.getItem(KEY)).toBeNull();
   });

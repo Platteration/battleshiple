@@ -1,4 +1,3 @@
-import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -22,7 +21,7 @@ import {
 } from './src/engine';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, Settings } from './src/settings';
 import { clearGame, loadGame, saveGame } from './src/storage';
-import { Lamp, ThemeProvider, useFirstPaintReady, useTheme } from './src/ui/theme';
+import { Appearance, ThemeProvider, useTheme } from './src/ui/theme';
 import { feedback } from './src/ui/feedback';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
@@ -30,22 +29,10 @@ import { HandoffScreen } from './src/ui/screens/HandoffScreen';
 import { HomeScreen } from './src/ui/screens/HomeScreen';
 import { SetupScreen } from './src/ui/screens/SetupScreen';
 
-// Best-effort: web and test environments have no native splash to hold.
-SplashScreen.preventAutoHideAsync().catch(() => undefined);
-
-/** Status bar content that reads on the current palette's paper. */
+/** Status bar content that reads on the current palette's background. */
 function ThemedStatusBar() {
   const { palette } = useTheme();
   return <StatusBar style={palette.statusBar} />;
-}
-
-/** Lifts the native splash once fonts are in, or after a short timeout. */
-function SplashGate() {
-  const ready = useFirstPaintReady();
-  useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
-  return null;
 }
 
 type Screen =
@@ -87,9 +74,9 @@ export default function App() {
     };
   }, []);
 
-  const onLampChange = useCallback((lamp: Lamp) => {
+  const onAppearanceChange = useCallback((appearance: Appearance) => {
     setSettings((prev) => {
-      const next = { ...prev, lamp };
+      const next = { ...prev, appearance };
       void saveSettings(next);
       return next;
     });
@@ -284,8 +271,8 @@ export default function App() {
     <HomeScreen
       difficulty={difficulty}
       onDifficultyChange={setDifficulty}
-      lamp={settings.lamp}
-      onLampChange={onLampChange}
+      appearance={settings.appearance}
+      onAppearanceChange={onAppearanceChange}
       onStart={startSetup}
       resume={saved ? { label: saved.label, onResume, onDiscard: onDiscardSave } : undefined}
     />
@@ -340,9 +327,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider lamp={settings.lamp}>
+      <ThemeProvider appearance={settings.appearance}>
         <ThemedStatusBar />
-        <SplashGate />
         {content}
       </ThemeProvider>
     </SafeAreaProvider>

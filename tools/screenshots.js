@@ -102,6 +102,40 @@ async function overflow(page) {
   });
 }
 
+/**
+ * A saved vs-Computer game one shot from victory: every enemy hull is sunk
+ * except the patrol boat's bow at B9. Resuming it and firing there reaches the
+ * game-over screen, an end state a real 80-turn game would never let the
+ * harness see. Shapes match src/engine/types.ts and pass src/storage.ts isValid.
+ */
+function nearlyWonSave() {
+  const ship = (classId, r, c, length, hits) => ({
+    id: classId, classId, bow: { r, c }, heading: 'E', length, hits, cooldown: 0,
+  });
+  const fleet = (sunk) => [
+    ship('carrier', 0, 4, 5, Array(5).fill(sunk)),
+    ship('battleship', 2, 3, 4, Array(4).fill(sunk)),
+    ship('destroyer', 4, 2, 3, Array(3).fill(sunk)),
+    ship('submarine', 6, 2, 3, Array(3).fill(sunk)),
+    // bow (8,1) = B9 still afloat; stern (8,0) already hit
+    ship('patrol', 8, 1, 2, sunk ? [false, true] : [false, false]),
+  ];
+  const player = (index, name, isAI, ships) => ({ index, name, isAI, ships, shots: [], splashes: [] });
+  return JSON.stringify({
+    version: 1,
+    savedAt: Date.now(),
+    difficulty: 'normal',
+    state: {
+      mode: 'ai',
+      players: [player(0, 'You', false, fleet(false)), player(1, 'Admiral Byte', true, fleet(true))],
+      current: 0,
+      phase: 'fire',
+      turn: 40,
+      log: [],
+    },
+  });
+}
+
 async function run(browser, cfg, errors) {
   const label = `${cfg.viewport.name}-${cfg.scheme}${cfg.motion === 'reduce' ? '-still' : ''}`;
   const dir = path.join(OUT, label);
@@ -193,8 +227,27 @@ async function run(browser, cfg, errors) {
     }
   }
 
+  // End state: resume a planted, nearly-won game and fire the winning shot.
+  let reachedEnd = false;
+  const endPage = await context.newPage();
+  endPage.on('pageerror', (e) => errors.push(`[${label}] PAGEERROR (end): ${e.message}`));
+  await endPage.goto(URL, { waitUntil: 'domcontentloaded' });
+  await endPage.evaluate((save) => localStorage.setItem('battleshiple:savegame:v1', save), nearlyWonSave());
+  await endPage.reload({ waitUntil: 'networkidle' });
+  await endPage.waitForTimeout(600);
+  try {
+    await tap(endPage, 'Resume game');
+    await cell(endPage, 'B9');
+    await tap(endPage, 'FIRE at B9');
+    await endPage.waitForTimeout(1200); // the win holds on the board briefly
+    await endPage.screenshot({ path: path.join(dir, '07-game-over.png') });
+    reachedEnd = true;
+  } catch (e) {
+    errors.push(`[${label}] could not reach game over: ${e.message}`);
+  }
+
   await context.close();
-  return { label, picked, splashed, hunted: cfg.hunt, fireOverflow, maneuverOverflow };
+  return { label, picked, splashed, hunted: cfg.hunt, fireOverflow, maneuverOverflow, reachedEnd };
 }
 
 (async () => {
@@ -210,11 +263,11 @@ async function run(browser, cfg, errors) {
   }
   await browser.close();
 
-  console.log('\n  config              manoeuvre     splash  overflow(fire/manoeuvre)');
+  console.log('\n  config              manoeuvre     splash  end   overflow(fire/manoeuvre)');
   for (const r of results) {
     const splash = r.hunted ? (r.splashed ? 'seen' : 'NONE') : '-';
     console.log(
-      `  ${r.label.padEnd(20)}${String(r.picked).padEnd(14)}${splash.padEnd(8)}${r.fireOverflow}px / ${r.maneuverOverflow}px`,
+      `  ${r.label.padEnd(20)}${String(r.picked).padEnd(14)}${splash.padEnd(8)}${(r.reachedEnd ? 'yes' : 'NO').padEnd(6)}${r.fireOverflow}px / ${r.maneuverOverflow}px`,
     );
   }
   console.log(errors.length ? '\nERRORS:\n' + errors.slice(0, 20).join('\n') : '\nno console errors');

@@ -391,11 +391,62 @@ describe('App', () => {
     }
   });
 
-  test('the plotting lamp can be switched and is remembered', async () => {
+  test('appearance can be switched and is remembered', async () => {
     const root = renderer.root;
-    pressText(root, 'Night');
+    pressText(root, 'Dark');
     await flush();
     const saved = await AsyncStorage.getItem('battleshiple:settings:v1');
-    expect(JSON.parse(saved as string).settings.lamp).toBe('night');
+    expect(JSON.parse(saved as string).settings.appearance).toBe('dark');
+  });
+
+  test('winning against the computer reads "You win!", not "You wins!"', async () => {
+    // A saved game one shot from victory: every enemy hull sunk except the
+    // patrol boat's bow at B9. Reaching game over for real takes ~80 turns.
+    const ship = (classId: string, r: number, c: number, length: number, hits: boolean[]) => ({
+      id: classId, classId, bow: { r, c }, heading: 'E', length, hits, cooldown: 0,
+    });
+    const fleet = (sunk: boolean) => [
+      ship('carrier', 0, 4, 5, Array(5).fill(sunk)),
+      ship('battleship', 2, 3, 4, Array(4).fill(sunk)),
+      ship('destroyer', 4, 2, 3, Array(3).fill(sunk)),
+      ship('submarine', 6, 2, 3, Array(3).fill(sunk)),
+      ship('patrol', 8, 1, 2, sunk ? [false, true] : [false, false]),
+    ];
+    const player = (index: number, name: string, isAI: boolean, sunk: boolean) => ({
+      index, name, isAI, ships: fleet(sunk), shots: [], splashes: [],
+    });
+    await AsyncStorage.setItem(
+      'battleshiple:savegame:v1',
+      JSON.stringify({
+        version: 1,
+        savedAt: 1,
+        difficulty: 'normal',
+        state: {
+          mode: 'ai',
+          players: [player(0, 'You', false, false), player(1, 'Admiral Byte', true, true)],
+          current: 0,
+          phase: 'fire',
+          turn: 40,
+          log: [],
+        },
+      }),
+    );
+    act(() => {
+      renderer.unmount();
+    });
+    await act(async () => {
+      renderer = create(<App />);
+    });
+    await flush();
+
+    const root = renderer.root;
+    pressText(root, 'Resume game');
+    pressCell(root, 'B9');
+    pressText(root, 'FIRE at B9');
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(hasText(root, 'You win!')).toBe(true);
+    expect(hasText(root, 'wins!')).toBe(false);
   });
 });

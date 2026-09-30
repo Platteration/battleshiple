@@ -1,11 +1,11 @@
 import { ShipClassId } from '../../engine';
 
-export type PaletteName = 'day' | 'night';
+export type PaletteName = 'light' | 'dark';
 
 /**
  * Semantic colour roles. Components ask for a role ("the ink for secondary
- * text"), never a hex, so a palette can change the whole look — including the
- * red-lamp night palette — without touching a component.
+ * text"), never a hex, so light and dark — and anything later — change the
+ * whole look without touching a component.
  */
 export interface Palette {
   name: PaletteName;
@@ -56,10 +56,21 @@ export interface Palette {
   };
   token: {
     fill: Record<ShipClassId, string>;
+    /** The crisp outline that separates a piece from the board. */
     stroke: string;
     sunk: string;
-    /** Details drawn on a token: bow marker, turrets. */
-    mark: string;
+    /** Details drawn on a hull, per class so each clears 3:1 on its own fill. */
+    mark: Record<ShipClassId, string>;
+  };
+  /**
+   * Shallow tabletop depth (VISUAL_STYLE.md): one small upper-left highlight
+   * and one short lower edge. Translucent, so it reads on any fill.
+   */
+  depth: {
+    highlight: string;
+    highlightSoft: string;
+    shade: string;
+    edge: string;
   };
   /** The splash, drawn as a contact report over a quadrant. */
   intel: {
@@ -76,10 +87,6 @@ export interface Palette {
     ink: string;
   };
   selected: string;
-  grain: {
-    tint: string;
-    opacity: number;
-  };
 }
 
 export const spacing = {
@@ -90,8 +97,9 @@ export const spacing = {
   xl: 24,
 } as const;
 
+/** VISUAL_STYLE.md: 8 / 12 / 16 point corner radii. */
 export const radius = {
-  sm: 6,
-  md: 10,
+  sm: 8,
+  md: 12,
   lg: 16,
 } as const;

@@ -17,3 +17,19 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --ci
+
+  bundle:
+    # Tests run in Jest, which never touches Metro. A native module that is
+    # missing, an asset that fails to resolve, or a platform-specific import
+    # only fails when the real bundler runs, so bundle every platform.
+    runs-on: ubuntu-latest
+    env:
+      EXPO_NO_TELEMETRY: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx expo export --platform all --output-dir dist

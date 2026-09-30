@@ -44,16 +44,28 @@ export function emptyGrid(): Grid {
   return grid;
 }
 
+/**
+ * The view of the cell at `c` in a grid from `emptyGrid`, BOARD_SIZE square.
+ * `c` must be on the board, and everything painted through here is: the engine
+ * never moves a hull or fires a shot off it, a target is a cell someone tapped,
+ * a preview is bounds-checked before it gets here, and `src/storage.ts` refuses
+ * a save whose hulls or shots say otherwise.
+ */
+function cellOn(grid: Grid, c: Coord): CellView {
+  return grid[c.r]![c.c]!;
+}
+
 export function paintShips(grid: Grid, ships: readonly Ship[], selectedId?: string): void {
   for (const ship of ships) {
     const cells = cellsOf(ship);
     const sunk = isSunk(ship);
     cells.forEach((cell, i) => {
-      grid[cell.r][cell.c].ship = {
+      cellOn(grid, cell).ship = {
         classId: ship.classId,
         isBow: i === 0,
         heading: ship.heading,
-        hit: ship.hits[i],
+        // A hull carries one `hits` entry per cell.
+        hit: ship.hits[i]!,
         sunk,
         selected: ship.id === selectedId,
         ready: isReady(ship),
@@ -66,7 +78,7 @@ export function paintShips(grid: Grid, ships: readonly Ship[], selectedId?: stri
 export function paintPreview(grid: Grid, cells: readonly Coord[], ok: boolean): void {
   for (const c of cells) {
     if (c.r < 0 || c.c < 0 || c.r >= BOARD_SIZE || c.c >= BOARD_SIZE) continue;
-    grid[c.r][c.c].preview = ok ? 'ok' : 'bad';
+    cellOn(grid, c).preview = ok ? 'ok' : 'bad';
   }
 }
 
@@ -75,7 +87,7 @@ function paintShots(grid: Grid, shots: readonly ShotRecord[], now: number, skipH
   const latest = new Map<string, ShotRecord>();
   for (const s of shots) latest.set(coordKey(s), s);
   for (const s of latest.values()) {
-    const cell = grid[s.r][s.c];
+    const cell = cellOn(grid, s);
     if (skipHitsOnShips && cell.ship) continue; // the ship itself shows its damage
     cell.shot = { result: s.result, age: now - s.turn };
   }
@@ -116,6 +128,6 @@ export function buildTrackingView(view: PlayerView, target?: Coord): Grid {
   const wrecks = view.enemy.fleet.flatMap((s) => (s.sunk ? [wreck(s)] : []));
   paintShips(grid, wrecks);
   paintShots(grid, view.me.shots, view.turn, false);
-  if (target) grid[target.r][target.c].target = true;
+  if (target) cellOn(grid, target).target = true;
   return grid;
 }

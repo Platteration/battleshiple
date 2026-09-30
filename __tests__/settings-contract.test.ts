@@ -1,0 +1,72 @@
+import fs from 'fs';
+import path from 'path';
+import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../src/about';
+import { DEFAULT_SETTINGS } from '../src/settings';
+import { STORAGE_KEYS } from '../src/storage';
+import { SETTINGS_ROWS } from '../src/ui/screens/SettingsScreen';
+import { DIFFICULTIES, REDUCE_MOTION, THEMES } from '../src/validate';
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+/**
+ * The settings contract shared with the sibling apps (CONVENTIONS.md, "User-facing
+ * settings"), pinned as literals. A renamed key silently orphans every player's
+ * record, which is the highest-cost drift there is, so nothing here is derived
+ * from the code it checks.
+ */
+describe('settings contract', () => {
+  it('names every storage key, as literals', () => {
+    // The savegame keeps its colon form: it predates the dot scheme and a
+    // rename for spelling would put every unfinished battle through a
+    // migration for nothing. The exception is listed here so it stays visible.
+    expect(STORAGE_KEYS).toEqual({
+      savegame: 'battleshiple:savegame:v1',
+      settings: 'battleshiple.settings.v1',
+    });
+  });
+
+  it('stores exactly these fields, with these defaults', () => {
+    expect(DEFAULT_SETTINGS).toEqual({ haptics: true, reduceMotion: 'system', difficulty: 'normal', theme: 'system' });
+    expect(Object.keys(DEFAULT_SETTINGS)).toEqual(['haptics', 'reduceMotion', 'difficulty', 'theme']);
+  });
+
+  it('shows these rows, in this order', () => {
+    // No Sound (the app makes none), no onboarding (no first-run flag).
+    // Computer skill stays on the menu. Theme arrived with the second palette
+    // (appearance.test.ts).
+    expect(SETTINGS_ROWS).toEqual(['Theme', 'Vibration', 'Reduce motion', 'Reset to defaults', 'About']);
+  });
+
+  it('accepts exactly these enum values', () => {
+    expect(Object.keys(REDUCE_MOTION)).toEqual(['system', 'on', 'off']);
+    expect(Object.keys(DIFFICULTIES)).toEqual(['easy', 'normal', 'hard']);
+    expect(Object.keys(THEMES)).toEqual(['system', 'light', 'dark']);
+  });
+
+  it('says on the About card what is true, from a module free of React Native', () => {
+    expect(APP_NAME).toBe('Battleshiple');
+    expect(TAGLINE).toContain('fleets move');
+    expect(LICENCE).toBe('MIT licence');
+    expect(SOURCE_URL).toBe('https://github.com/Platteration/battleshiple');
+    // Backed by appConfig.test.ts, which scans the source for network code.
+    expect(PRIVACY).toBe('Nothing leaves your device.');
+    // A missing or empty configured version reads as a placeholder, never "undefined".
+    expect(appVersion('1.0.0')).toBe('1.0.0');
+    expect(appVersion(undefined)).toBe('0.0.0');
+    expect(appVersion('')).toBe('0.0.0');
+    expect(appVersion(7)).toBe('0.0.0');
+  });
+
+  it('shows the version app.json carries, and package.json agrees with it', () => {
+    const root = path.join(__dirname, '..');
+    const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo;
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    expect(app.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(pkg.version).toBe(app.version);
+    // expo-constants is what reads it back at runtime, and has to be a direct
+    // dependency: nested under expo/node_modules it resolves only by accident.
+    expect(pkg.dependencies['expo-constants']).toBeDefined();
+  });
+});

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import {
   Coord,
   FLEET,
@@ -128,6 +128,9 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
           return (
             <Pressable
               key={id}
+              accessibilityRole="button"
+              accessibilityLabel={`${cls.name}, ${placedIds.has(id) ? 'placed' : 'not placed'}`}
+              accessibilityState={{ selected: isSel }}
               onPress={() => {
                 setSelected(id);
                 const existing = ships.find((s) => s.classId === id);

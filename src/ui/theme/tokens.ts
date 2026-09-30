@@ -87,6 +87,11 @@ export interface Palette {
     ink: string;
   };
   selected: string;
+  /**
+   * An on/off switch. Both tracks clear 3:1 against the card they sit on, and
+   * the thumb clears 3:1 against either track, so the state reads by position.
+   */
+  control: { trackOn: string; trackOff: string; thumb: string };
 }
 
 export const spacing = {

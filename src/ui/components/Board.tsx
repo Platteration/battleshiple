@@ -154,7 +154,10 @@ export function Board({ grid, width, onPressCell, splashes = [], disabled }: Pro
           {row.map((cv, c) => (
             <Pressable
               key={c}
+              accessibilityRole="button"
               accessibilityLabel={`${COLS[c]}${r + 1}`}
+              // The locked target is the one cell FIRE will act on, so a screen reader is told which it is.
+              accessibilityState={{ disabled: disabled || !onPressCell, selected: !!cv.target }}
               disabled={disabled || !onPressCell}
               onPress={() => onPressCell?.({ r, c })}
               style={[styles.cell, { width: cell, height: cell }]}

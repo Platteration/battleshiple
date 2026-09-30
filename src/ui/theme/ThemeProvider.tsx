@@ -4,8 +4,8 @@ import { palettes } from './palettes';
 import { Palette, PaletteName, radius, spacing } from './tokens';
 import { TypeScale, typeScale } from './type';
 
-/** The player's appearance choice. `auto` follows the device. */
-export type Appearance = 'auto' | 'light' | 'dark';
+/** The player's Theme setting. `system` follows the device. */
+export type ThemeSetting = 'system' | 'light' | 'dark';
 
 export interface Theme {
   name: PaletteName;
@@ -28,21 +28,26 @@ export function getTheme(name: PaletteName): Theme {
   return theme;
 }
 
-export function resolveAppearance(appearance: Appearance, system: string | null | undefined): PaletteName {
-  if (appearance === 'light' || appearance === 'dark') return appearance;
-  return system === 'dark' ? 'dark' : 'light';
+/**
+ * The palette a setting draws. `system` follows the device, and a device that
+ * reports no scheme (`null`) gets dark, as CONVENTIONS.md decides for every
+ * app: `system === 'light' ? 'light' : 'dark'`.
+ */
+export function resolveTheme(setting: ThemeSetting, system: string | null | undefined): PaletteName {
+  if (setting === 'light' || setting === 'dark') return setting;
+  return system === 'light' ? 'light' : 'dark';
 }
 
-const ThemeContext = createContext<Theme>(getTheme('light'));
+const ThemeContext = createContext<Theme>(getTheme('dark'));
 
 interface Props {
-  appearance?: Appearance;
+  theme?: ThemeSetting;
   children: React.ReactNode;
 }
 
-export function ThemeProvider({ appearance = 'auto', children }: Props) {
+export function ThemeProvider({ theme: setting = 'system', children }: Props) {
   const system = useColorScheme();
-  const theme = useMemo(() => getTheme(resolveAppearance(appearance, system)), [appearance, system]);
+  const theme = useMemo(() => getTheme(resolveTheme(setting, system)), [setting, system]);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

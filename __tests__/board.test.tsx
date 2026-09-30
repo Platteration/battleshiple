@@ -6,6 +6,11 @@ import { emptyGrid, paintShips } from '../src/ui/boardView';
 import { Board } from '../src/ui/components/Board';
 import { dark, light, Palette, ThemeProvider } from '../src/ui/theme';
 
+// The board draws the splash overlay, which reads the Reduce motion setting.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 const SIDES = ['borderTopColor', 'borderLeftColor', 'borderRightColor', 'borderBottomColor'] as const;
 
 /** The hull view drawn inside the cell with the given label ("A1"). */
@@ -44,7 +49,7 @@ describe.each([
     paintShips(grid, [ship], selected ? ship.id : undefined);
     act(() => {
       renderer = create(
-        <ThemeProvider appearance={appearance}>
+        <ThemeProvider theme={appearance}>
           <Board grid={grid} width={330} />
         </ThemeProvider>,
       );
@@ -87,7 +92,7 @@ describe.each([
     paintShips(grid, [ship], selected ? ship.id : undefined);
     act(() => {
       renderer = create(
-        <ThemeProvider appearance={appearance}>
+        <ThemeProvider theme={appearance}>
           <Board grid={grid} width={330} />
         </ThemeProvider>,
       );

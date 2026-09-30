@@ -103,6 +103,7 @@ export const dark: Palette = {
     ink: '#ef9290',
   },
   selected: '#e8bd70',
+  control: { trackOn: '#e8bd70', trackOff: '#b7c2c7', thumb: '#19232d' },
 };
 
 /**
@@ -172,6 +173,7 @@ export const light: Palette = {
     ink: '#a8413a',
   },
   selected: '#8a5a10',
+  control: { trackOn: '#8a5a10', trackOff: '#4d5b66', thumb: '#fffcf5' },
 };
 
 export const palettes = { light, dark } as const;

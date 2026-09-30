@@ -1,26 +1,23 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
-import { Appearance, makeStyles, radius, spacing, useTheme } from '../theme';
+import { makeStyles, radius, spacing, useTheme } from '../theme';
 
 interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
-  appearance: Appearance;
-  onAppearanceChange: (appearance: Appearance) => void;
+  /** The stored preferences have been read. The skill control waits for them rather than show Normal for a frame. */
+  loaded: boolean;
   onStart: (mode: GameMode) => void;
+  onSettings: () => void;
+  /** Present when something went wrong and the player is owed an explanation. */
+  notice?: string;
   /** Present when an unfinished game is on disk. */
   resume?: { label: string; onResume: () => void; onDiscard: () => void };
 }
-
-const APPEARANCES: { value: Appearance; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
 
 const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'easy', label: 'Easy' },
@@ -34,7 +31,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, appearance, onAppearanceChange }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, loaded, onStart, onSettings, notice, resume }: Props) {
   const styles = useStyles();
   const { palette: p } = useTheme();
   const [showRules, setShowRules] = useState(false);
@@ -45,6 +42,12 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, ap
         <Text style={styles.subtitle}>Battleship, but the fleets won't sit still.</Text>
       </View>
 
+      {notice && (
+        <View style={styles.notice}>
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      )}
+
       {resume && (
         <View style={styles.resume}>
           <Text style={styles.resumeLabel}>Unfinished battle</Text>
@@ -54,14 +57,17 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, ap
         </View>
       )}
 
-      <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
-      <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
+      {loaded && (
+        <>
+          <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
+          <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
+        </>
+      )}
 
       <Button title="Play vs Computer" onPress={() => onStart('ai')} />
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />
       <Button title={showRules ? 'Hide rules' : 'How to play'} variant="ghost" onPress={() => setShowRules((v) => !v)} />
-
-      <Segmented label="Appearance" options={APPEARANCES} value={appearance} onChange={onAppearanceChange} />
+      <Button title="Settings" variant="ghost" onPress={onSettings} />
 
       {showRules && (
         <View style={styles.rules}>
@@ -122,6 +128,14 @@ const useStyles = makeStyles(({ palette: p, type: ty }) => ({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  notice: {
+    backgroundColor: p.surface.raised,
+    borderColor: p.surface.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  noticeText: { ...ty.caption, color: p.ink.secondary },
   resumeLabel: { ...ty.label, color: p.accent.text },
   resumeMeta: { ...ty.caption, color: p.ink.secondary },
   blurb: { ...ty.caption, color: p.ink.secondary, marginTop: -spacing.xs },

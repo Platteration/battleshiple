@@ -1,12 +1,22 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
+let enabled = true;
+
+/**
+ * Set by the settings provider from the Vibration switch. Off means every call
+ * below is skipped before it reaches the engine, not merely quietened.
+ */
+export function setHapticsEnabled(on: boolean): void {
+  enabled = on;
+}
+
 /**
  * Thin haptics wrapper. Web has no haptics engine and older devices may reject a
  * pattern, so every call is best-effort and never rejects.
  */
 function safe(run: () => Promise<void>): void {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || !enabled) return;
   void run().catch(() => undefined);
 }
 

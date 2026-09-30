@@ -94,7 +94,7 @@ describe('replay data sufficiency', () => {
     const rng = seededRng(4);
     let g = createGame({ mode: 'local', names: ['A', 'B'], fleets: [randomFleet(rng), randomFleet(rng)] });
     const before = visibleShape(g.opening![1]);
-    g = endTurn(fire(g, g.players[1].ships[0].bow).state); // damage player 1
+    g = endTurn(fire(g, g.players[1].ships[0]!.bow).state); // damage player 1
     expect(visibleShape(g.opening![1])).toEqual(before);
     expect(visibleShape(g.players[1].ships)).not.toEqual(before);
   });
@@ -116,7 +116,7 @@ describe('replay data sufficiency', () => {
     });
     const after = g.players[0].ships.find((s) => s.id === 'patrol')!;
     expect(entry.move!.to).toEqual({ bow: after.bow, heading: after.heading });
-    expect(entry.move!.quadrant).toEqual(g.players[1].splashes[0].quadrant);
+    expect(entry.move!.quadrant).toEqual(g.players[1].splashes[0]!.quadrant);
   });
 
   test('a full game reconstructs exactly, over many seeds', () => {

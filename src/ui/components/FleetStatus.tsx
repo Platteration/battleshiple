@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SHIP_CLASSES, Ship, damageOf, isReady, isSunk } from '../../engine';
 import { makeStyles, radius, spacing, useTheme } from '../theme';
 
@@ -30,6 +30,9 @@ export function FleetStatus({ ships, selectedId, onSelect, compact }: Props) {
         return (
           <Pressable
             key={ship.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${cls.name}, ${statusText(ship).toLowerCase()}`}
+            accessibilityState={{ selected, disabled: !onSelect || sunk }}
             disabled={!onSelect || sunk}
             onPress={() => onSelect?.(ship)}
             style={[styles.card, selected && styles.cardSelected, sunk && styles.cardSunk, compact && styles.cardCompact]}

@@ -3,8 +3,6 @@ import { HEADING_VECTORS, add, rotateCCW, rotateCW } from './geometry';
 import { cellsOf, damageOf, footprintIsFree, isSunk } from './ships';
 import { Coord, Maneuver, ManeuverKind, Pose, Ship } from './types';
 
-export type { Pose };
-
 /** Compute where the ship would end up after a manoeuvre (no validation). */
 export function projectManeuver(ship: Ship, m: Maneuver): Pose {
   const fwd = HEADING_VECTORS[ship.heading];

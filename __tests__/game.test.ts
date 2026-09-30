@@ -171,7 +171,7 @@ describe('splash placement and incoming-shot snapshots', () => {
     let g = createGame({ mode: 'local', names: ['A', 'B'], fleets: [crossingFleet(), fleetA()] });
     g = fire(g, { r: 9, c: 9 }).state;
     g = maneuver(g, 'patrol', { kind: 'ahead', distance: 1 });
-    const splash = g.players[1].splashes[0];
+    const splash = g.players[1].splashes[0]!;
     expect(splash.turn).toBe(0);
     g = endTurn(g); // A's turn ends; B has not looked yet
     expect(g.players[1].splashes).toHaveLength(1);

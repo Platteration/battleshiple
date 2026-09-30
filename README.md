@@ -65,11 +65,29 @@ hit is a hint rather than a certainty.
 Only the hard opponent uses splash intelligence, so manoeuvring is nearly free
 against easy and normal, and a genuine trade-off against hard.
 
+## Settings
+
+From the menu: **Theme** (system, light or dark), **Vibration** on or off, **Reduce
+motion** (system, on or off — holds the splash ripples still without hiding them),
+**Reset to defaults**, and an About card with the version and licence. The computer skill you pick on the menu is kept
+between launches. Nothing leaves your device: the app has no network code.
+
 ## Saved games
 
 A match is autosaved after every change and when the app is backgrounded, so a
 phone call will not cost you a game. Quitting to the menu keeps the game, and
 the menu offers to resume or discard it. Finishing a game clears the save.
+
+The save lives on the device. On Android it is deliberately kept out of cloud
+backup and device-to-device transfer, so a reinstall or a new phone starts with
+an empty menu rather than with an unfinished battle; on iOS it travels only as
+part of a full device backup. There is one save slot, and starting a new battle
+spends it — the app asks first.
+
+A marathon match — thousands of turns, far beyond any finished game — keeps its
+oldest log lines and shot markers only up to a generous ceiling. The match
+itself is never thrown away for being too long, and a battle the app fails to
+play is set aside rather than deleted.
 
 ## Balance
 
@@ -90,7 +108,7 @@ rule change; the engine is pure, so measuring beats arguing.
 |--------|---------------|--------------|----------|
 | Easy   | 1.2%          | 52.2%        | 51.0 pts |
 | Normal | 0.6%          | 51.2%        | 50.6 pts |
-| Hard   | 11.4%         | 50.8%        | 39.4 pts |
+| Hard   | 11.4%         | 51.2%        | 39.8 pts |
 
 Evading with a damaged ship is the single most valuable skill, because a hit
 segment stays hit and a stationary wounded hull is simply finished off. Staying
@@ -103,9 +121,9 @@ away. That is the trade the game is built on, and it is worth ~12 points.
 | Matchup        | Win rate for the first named |
 |----------------|------------------------------|
 | Easy vs Hard   | 13.4%                        |
-| Normal vs Hard | 28.6%                        |
+| Normal vs Hard | 28.2%                        |
 | Easy vs Normal | 24.4%                        |
-| Hard vs Hard   | 50.8% (sanity check)         |
+| Hard vs Hard   | 51.2% (sanity check)         |
 
 **Games are long**, in turns per side:
 
@@ -127,15 +145,15 @@ Battleshiple follows the shared illustrated-tabletop language in
 [VISUAL_STYLE.md](VISUAL_STYLE.md): warm ivory or deep ink behind opaque
 panels, muted sea-glass and amber accents, the platform sans-serif, and shallow
 depth — a crisp outline, a short lower edge and a small upper-left highlight on
-each hull. The Appearance setting on the home screen picks Light, Dark, or Auto
-(follow the device).
+each hull. The Theme setting picks Light, Dark, or System, which follows the
+device (and is dark on one that reports no preference).
 
 Colours live in semantic roles in `src/ui/theme/`, never in components; a test
 fails if a colour literal appears anywhere else. Every pairing the UI draws is
 checked against WCAG — 4.5:1 for text, 3:1 for marks, lines and outlines — in
 both appearances, and ship hulls must stand out from the water they sit on.
 
-## Running the app
+## Running it
 
 Requires Node 22 and the Expo tooling.
 
@@ -147,15 +165,16 @@ npx expo start
 Scan the QR code with **Expo Go** on iOS or Android, or press `i` / `a` to open
 a simulator / emulator.
 
-It also runs in a browser via react-native-web:
+Web is not a target platform and has no dependencies in the project, but it is
+the only way to *see* the UI without a simulator, which is how several layout and
+copy defects were caught. Install the web renderer without saving it, then start:
 
 ```bash
+npm install --no-save react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
 npm run web
 ```
 
-Web is a development and review convenience, not a target platform — haptics are
-inert there. It exists because it is the only way to *see* the UI without a
-simulator, which is how several layout and copy defects were caught.
+Haptics are inert there.
 
 ### Native builds
 
@@ -170,9 +189,17 @@ eas build -p android --profile preview
 ## Development
 
 ```bash
-npm run typecheck   # TypeScript
-npm test            # Jest: 55 tests, engine + UI
+npm run lint               # ESLint (Expo's preset)
+npm run typecheck          # TypeScript
+npm test                   # Jest (engine unit tests + UI smoke tests)
+npm run test:conventions   # the conventions shared with the sibling repositories
+npm run check              # all of the above: the gate before a push
+npm run sim                # the balance simulation behind the numbers above
 ```
+
+CI runs the same steps one at a time, then bundles the app for Android and iOS
+with `expo export`; a separate job runs `npm audit --omit=dev --audit-level=high`
+against the lockfile.
 
 ### Seeing the UI
 
@@ -180,11 +207,12 @@ There is no simulator in most automated environments, so `tools/screenshots.js`
 drives the web build in Chromium. Each run covers three phone sizes (390x844,
 360x640, 430x932) in light and dark, with and without reduced motion, and reaches
 the game-over screen by resuming a planted near-finished save. It seeds
-`Math.random`, so runs are repeatable, and fails on any console error. Playwright
-is deliberately not a repo dependency, to keep CI from pulling browser binaries.
+`Math.random`, so runs are repeatable, and fails on any console error. Neither
+Playwright nor the web renderer is a repo dependency, to keep CI from pulling
+browser binaries.
 
 ```bash
-npm i -D playwright
+npm install --no-save playwright react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
 npx expo export --platform web --output-dir /tmp/web
 (cd /tmp/web && python3 -m http.server 8099 &)
 node tools/screenshots.js /tmp/shots              # full matrix
@@ -204,7 +232,7 @@ writes the PNGs directly, with no image-library dependency:
 python3 tools/generate-icons.py assets
 ```
 
-### Project layout
+## Project layout
 
 ```
 App.tsx                  screen state machine (home → setup → game → over)
@@ -216,8 +244,13 @@ src/engine/              pure TypeScript rules, no React
   maneuver.ts            move / shift / rotate validation and cooldowns
   game.ts                fire, manoeuvre, end turn, splashes, win detection
   ai.ts                  computer opponent and difficulty profiles
-src/storage.ts           autosave / resume on AsyncStorage
-src/settings.ts          appearance preference
+  view.ts                one player's redacted view of a match
+src/storage.ts           autosave / resume on AsyncStorage, and every storage key
+src/settings.tsx         preferences (theme, vibration, reduce motion, computer skill)
+src/validate.ts          clamps the stored preferences to values the app knows
+src/motion.ts            reduce-motion resolution (setting, device, web)
+src/about.ts             what the About card says, free of React Native
+src/confirm.ts           a confirmation that works on the web as well as a device
 src/ui/theme/            palettes, type scale, contrast checks, ThemeProvider
 src/ui/                  React Native components and screens
 tools/                   simulation, screenshots, icon generator, PNG diff

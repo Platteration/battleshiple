@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Pressable, Text, ViewStyle } from 'react-native';
 import { makeStyles, radius, spacing } from '../theme';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';

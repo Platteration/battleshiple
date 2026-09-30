@@ -8,11 +8,12 @@
  * "You's Patrol Boat".
  *
  * Every run covers a matrix of phone sizes, colour schemes and motion settings,
- * because the layout has a compact mode for small phones and a night palette,
+ * because the layout has a compact mode for small phones and two palettes,
  * and a bug in either is invisible from a single configuration.
  *
  * Usage:
- *   npm i -D playwright            # not a repo dependency: keeps CI lean
+ *   # Neither is a repo dependency: CI stays lean and web is not a target.
+ *   npm install --no-save playwright react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
  *   npx expo export --platform web --output-dir /tmp/web
  *   (cd /tmp/web && python3 -m http.server 8099 &)
  *   node tools/screenshots.js /tmp/shots            # full matrix
@@ -177,6 +178,10 @@ async function run(browser, cfg, errors) {
   await tap(page, 'How to play');
   await shot('02-rules');
   await tap(page, 'Hide rules');
+
+  await tap(page, 'Settings');
+  await shot('08-settings');
+  await tap(page, 'Back to menu');
 
   // Hard makes the computer reposition often, so a splash arrives sooner.
   await tap(page, 'Hard');

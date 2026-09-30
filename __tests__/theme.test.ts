@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { contrast, dark, getTheme, GRAPHIC_MIN, light, Palette, resolveAppearance, TEXT_MIN, typeScale } from '../src/ui/theme';
+import { contrast, dark, getTheme, GRAPHIC_MIN, light, Palette, resolveTheme, TEXT_MIN, typeScale } from '../src/ui/theme';
 
 const ROOT = join(__dirname, '..');
 
@@ -51,12 +51,18 @@ describe('theme objects', () => {
     }
   });
 
-  test('appearance follows the device only when set to auto', () => {
-    expect(resolveAppearance('auto', 'dark')).toBe('dark');
-    expect(resolveAppearance('auto', 'light')).toBe('light');
-    expect(resolveAppearance('auto', null)).toBe('light');
-    expect(resolveAppearance('light', 'dark')).toBe('light');
-    expect(resolveAppearance('dark', 'light')).toBe('dark');
+  test('the theme follows the device only when set to system', () => {
+    expect(resolveTheme('system', 'dark')).toBe('dark');
+    expect(resolveTheme('system', 'light')).toBe('light');
+    expect(resolveTheme('light', 'dark')).toBe('light');
+    expect(resolveTheme('dark', 'light')).toBe('dark');
+  });
+
+  test('a device that reports no scheme gets dark, as CONVENTIONS.md decides', () => {
+    // `system === 'light' ? 'light' : 'dark'`: anything but an explicit light is dark.
+    expect(resolveTheme('system', null)).toBe('dark');
+    expect(resolveTheme('system', undefined)).toBe('dark');
+    expect(resolveTheme('system', 'unspecified')).toBe('dark');
   });
 });
 
@@ -91,6 +97,10 @@ function pairings(p: Palette): [string, string, string, number][] {
     ['legal preview outline', p.preview.okStroke, p.board.water, GRAPHIC_MIN],
     ['illegal preview outline', p.preview.badStroke, p.board.water, GRAPHIC_MIN],
     ['token outline on water', p.token.stroke, p.board.water, GRAPHIC_MIN],
+    ['switch track (on) on cards', p.control.trackOn, p.surface.raised, GRAPHIC_MIN],
+    ['switch track (off) on cards', p.control.trackOff, p.surface.raised, GRAPHIC_MIN],
+    ['switch thumb on its track (on)', p.control.thumb, p.control.trackOn, GRAPHIC_MIN],
+    ['switch thumb on its track (off)', p.control.thumb, p.control.trackOff, GRAPHIC_MIN],
   ];
   // The crisp outline is what separates a piece from the board ('token
   // outline on water' above); the fill sits inside it. What must read on the

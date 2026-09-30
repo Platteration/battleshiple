@@ -123,9 +123,9 @@ describe('toPlayerView does not depend on hidden information', () => {
 
   test('positive control: changing what the viewer does know changes the view', () => {
     // Without this, a view that ignored its input entirely would pass the above.
-    const state = snapshots(3)[2];
+    const state = snapshots(3)[2]!;
     const next = clone(state);
-    next.players[0].ships[0].cooldown += 1;
+    next.players[0].ships[0]!.cooldown += 1;
     expect(JSON.stringify(toPlayerView(next, 0))).not.toBe(JSON.stringify(toPlayerView(state, 0)));
     const shot = clone(state);
     shot.players[1].shots.push({ r: 0, c: 0, result: 'miss', turn: 1 });
@@ -189,10 +189,10 @@ describe('toPlayerView contents', () => {
   test('the view is a copy: mutating it cannot reach back into the game', () => {
     const g = createGame({ mode: 'local', names: ['A', 'B'], fleets: [fleet(), fleet()] });
     const view = toPlayerView(g, 0);
-    view.me.ships[0].bow.r = 7;
-    view.me.ships[0].hits[0] = true;
-    expect(g.players[0].ships[0].bow.r).toBe(0);
-    expect(g.players[0].ships[0].hits[0]).toBe(false);
+    view.me.ships[0]!.bow.r = 7;
+    view.me.ships[0]!.hits[0] = true;
+    expect(g.players[0].ships[0]!.bow.r).toBe(0);
+    expect(g.players[0].ships[0]!.hits[0]).toBe(false);
   });
 });
 

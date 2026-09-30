@@ -11,11 +11,11 @@ export const HEADING_VECTORS: Record<Heading, Coord> = {
 };
 
 export function rotateCW(h: Heading): Heading {
-  return HEADINGS[(HEADINGS.indexOf(h) + 1) % 4];
+  return HEADINGS[(HEADINGS.indexOf(h) + 1) % 4]!;
 }
 
 export function rotateCCW(h: Heading): Heading {
-  return HEADINGS[(HEADINGS.indexOf(h) + 3) % 4];
+  return HEADINGS[(HEADINGS.indexOf(h) + 3) % 4]!;
 }
 
 export function add(a: Coord, b: Coord, times = 1): Coord {

@@ -19,7 +19,7 @@
  */
 import { aiChooseManeuver, aiChooseShot, Difficulty } from '../src/engine/ai';
 import { createGame, endTurn, fire, maneuver } from '../src/engine/game';
-import { Rng, seededRng } from '../src/engine/random';
+import { seededRng } from '../src/engine/random';
 import { isSunk, randomFleet } from '../src/engine/ships';
 import { GameState, PlayerIndex } from '../src/engine/types';
 import { SHIP_CLASSES } from '../src/engine/constants';
@@ -91,7 +91,8 @@ function playGame(seed: number, level: [Difficulty, Difficulty], moves: [boolean
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return NaN;
-  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+  // Non-empty, so the clamped index is inside it.
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]!;
 }
 
 function stats(values: number[]) {
@@ -173,13 +174,13 @@ function suiteKills(opts: Options) {
   for (const d of DIFFICULTIES) {
     const rows = run(opts, [d, d], [true, true]).filter((r) => r.finished && r.winner === 0);
     const nth: number[][] = [[], [], [], [], []];
-    for (const r of rows) r.killShots.forEach((t, i) => i < 5 && nth[i].push(t));
+    for (const r of rows) r.killShots.forEach((t, i) => i < 5 && nth[i]!.push(t));
     const med = nth.map((a) => stats(a).median);
-    const spent = med.map((v, i) => (i === 0 ? v : v - med[i - 1]));
+    const spent = med.map((v, i) => (i === 0 ? v : v - med[i - 1]!));
     // Report the endgame drag rather than asserting there isn't one: the last
     // hull is a small, mobile target on an empty board and costs measurably more.
     const earlier = stats(spent.slice(0, spent.length - 1)).median;
-    const last = spent[spent.length - 1];
+    const last = spent[spent.length - 1]!;
     const ratio = earlier > 0 ? last / earlier : NaN;
     console.log(`  ${d.padEnd(7)} cumulative: ${med.map((v, i) => `${i + 1}:${v}`).join('  ')}`);
     console.log(`  ${''.padEnd(7)} per kill:   ${spent.map((v, i) => `${i + 1}:${v}`).join('  ')}`);
@@ -218,5 +219,6 @@ const opts = parseArgs(process.argv.slice(2));
 const chosen = opts.suite === 'all' ? Object.keys(SUITES) : [opts.suite];
 console.log(`Battleshiple simulation — ${opts.games} games per row, base seed ${opts.seed}`);
 const started = Date.now();
-for (const name of chosen) SUITES[name](opts);
+// parseArgs has already refused a suite name that is not a key of SUITES.
+for (const name of chosen) SUITES[name]!(opts);
 console.log(`\nDone in ${((Date.now() - started) / 1000).toFixed(1)}s`);

@@ -10,7 +10,7 @@ import {
   describeManeuver,
   mobilityOf,
 } from '../../engine';
-import { colors, radius, spacing } from '../theme';
+import { makeStyles, radius, spacing } from '../theme';
 import { Button } from './Button';
 
 interface Props {
@@ -34,6 +34,7 @@ function sameManeuver(a: Maneuver | null, b: Maneuver): boolean {
 
 /** Buttons for every manoeuvre kind; tap once to preview, confirm to execute. */
 export function ManeuverPanel({ ship, fleet, pending, onPick, onConfirm, onCancel }: Props) {
+  const styles = useStyles();
   if (!ship) {
     return (
       <View style={styles.panel}>
@@ -115,20 +116,20 @@ export function ManeuverPanel({ ship, fleet, pending, onPick, onConfirm, onCance
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   panel: {
-    backgroundColor: colors.panel,
-    borderColor: colors.panelBorder,
+    backgroundColor: p.surface.raised,
+    borderColor: p.surface.border,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
   },
   header: { gap: 2 },
-  title: { color: colors.text, fontWeight: '800', fontSize: 16 },
-  meta: { color: colors.textDim, fontSize: 12 },
-  blocked: { color: colors.danger, fontSize: 12, fontWeight: '700' },
+  title: { color: p.ink.primary, fontWeight: '800', fontSize: 16 },
+  meta: { color: p.ink.secondary, fontSize: 12 },
+  blocked: { color: p.signal.danger, fontSize: 12, fontWeight: '700' },
   row: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
-  hint: { color: colors.textDim, fontSize: 12, textAlign: 'center' },
-});
+  hint: { color: p.ink.secondary, fontSize: 12, textAlign: 'center' },
+}));

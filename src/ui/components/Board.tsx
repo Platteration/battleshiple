@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BOARD_SIZE, Coord, Quadrant, headingArrow } from '../../engine';
 import { CellView, Grid } from '../boardView';
-import { colors, shipColors } from '../theme';
+import { makeStyles, useTheme } from '../theme';
 import { SplashOverlay } from './SplashOverlay';
 
 interface Props {
@@ -21,6 +21,8 @@ function ageOpacity(age: number): number {
 }
 
 function CellContent({ cell, size }: { cell: CellView; size: number }) {
+  const styles = useStyles();
+  const { palette: p } = useTheme();
   const fontSize = Math.max(10, size * 0.55);
   const nodes: React.ReactNode[] = [];
 
@@ -32,7 +34,7 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: s.sunk ? colors.sunk : shipColors[s.classId],
+            backgroundColor: s.sunk ? p.token.sunk : p.token.fill[s.classId],
             opacity: s.sunk ? 0.9 : s.ready ? 1 : 0.6,
             margin: 1,
             borderRadius: 3,
@@ -84,8 +86,8 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
           StyleSheet.absoluteFill,
           styles.preview,
           {
-            backgroundColor: ok ? colors.previewOk : colors.previewBad,
-            borderColor: ok ? colors.previewOkBorder : colors.previewBadBorder,
+            backgroundColor: ok ? p.preview.okFill : p.preview.badFill,
+            borderColor: ok ? p.preview.okStroke : p.preview.badStroke,
           },
         ]}
       />,
@@ -104,6 +106,7 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
 }
 
 export function Board({ grid, width, onPressCell, splashes = [], disabled }: Props) {
+  const styles = useStyles();
   const cell = Math.floor(width / (BOARD_SIZE + 1));
   const playSize = cell * BOARD_SIZE;
   const labelFont = Math.max(9, cell * 0.4);
@@ -143,24 +146,24 @@ export function Board({ grid, width, onPressCell, splashes = [], disabled }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   wrapper: { alignSelf: 'center' },
   row: { flexDirection: 'row' },
   label: { alignItems: 'center', justifyContent: 'center' },
-  labelText: { color: colors.textDim, fontWeight: '600' },
+  labelText: { color: p.ink.secondary, fontWeight: '600' },
   cell: {
-    backgroundColor: colors.water,
+    backgroundColor: p.board.water,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.waterLine,
+    borderColor: p.board.grid,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  selectedShip: { borderWidth: 2, borderColor: colors.selected },
+  selectedShip: { borderWidth: 2, borderColor: p.selected },
   preview: { borderWidth: 2, borderStyle: 'dashed' },
-  bow: { color: 'rgba(0,0,0,0.65)', fontWeight: '900' },
-  hitMark: { color: colors.hit, fontWeight: '900', position: 'absolute' },
-  missDot: { backgroundColor: colors.miss },
-  target: { borderWidth: 2, borderColor: colors.selected, alignItems: 'center', justifyContent: 'center' },
-  targetMark: { color: colors.selected, fontWeight: '900' },
-});
+  bow: { color: p.token.mark, fontWeight: '900' },
+  hitMark: { color: p.pencil.hit, fontWeight: '900', position: 'absolute' },
+  missDot: { backgroundColor: p.pencil.miss },
+  target: { borderWidth: 2, borderColor: p.selected, alignItems: 'center', justifyContent: 'center' },
+  targetMark: { color: p.selected, fontWeight: '900' },
+}));

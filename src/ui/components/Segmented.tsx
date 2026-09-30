@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius } from '../theme';
+import { makeStyles, radius } from '../theme';
 
 interface Option<T extends string> {
   value: T;
@@ -15,6 +15,7 @@ interface Props<T extends string> {
 }
 
 export function Segmented<T extends string>({ options, value, onChange, label }: Props<T>) {
+  const styles = useStyles();
   return (
     <View style={styles.wrap}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -38,12 +39,12 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   wrap: { gap: 6 },
-  label: { color: colors.textDim, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  bar: { flexDirection: 'row', backgroundColor: colors.panel, borderRadius: radius.md, padding: 3 },
+  label: { color: p.ink.secondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  bar: { flexDirection: 'row', backgroundColor: p.surface.raised, borderRadius: radius.md, padding: 3 },
   segment: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: radius.sm },
-  segmentActive: { backgroundColor: colors.accent },
-  text: { color: colors.textDim, fontWeight: '700', fontSize: 14 },
-  textActive: { color: colors.accentText },
-});
+  segmentActive: { backgroundColor: p.accent.fill },
+  text: { color: p.ink.secondary, fontWeight: '700', fontSize: 14 },
+  textActive: { color: p.ink.onAccent },
+}));

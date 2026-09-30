@@ -20,6 +20,7 @@ import {
   randomFleet,
 } from './src/engine';
 import { clearGame, loadGame, saveGame } from './src/storage';
+import { ThemeProvider } from './src/ui/theme';
 import { feedback } from './src/ui/feedback';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
@@ -298,8 +299,10 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
-      {content}
+      <ThemeProvider>
+        <StatusBar style="light" />
+        {content}
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

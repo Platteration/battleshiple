@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing } from '../theme';
+import { makeStyles, spacing } from '../theme';
 
 interface Props {
   children: React.ReactNode;
@@ -11,6 +11,7 @@ interface Props {
 
 /** Full-screen dark background that respects notches and home indicators. */
 export function Screen({ children, scroll = true, style }: Props) {
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const padding = {
     paddingTop: insets.top + spacing.sm,
@@ -28,7 +29,7 @@ export function Screen({ children, scroll = true, style }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+const useStyles = makeStyles(({ palette: p }) => ({
+  root: { flex: 1, backgroundColor: p.surface.base },
   content: { gap: spacing.md },
-});
+}));

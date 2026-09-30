@@ -24,7 +24,7 @@ import { FleetStatus } from '../components/FleetStatus';
 import { ManeuverPanel } from '../components/ManeuverPanel';
 import { Screen } from '../components/Screen';
 import { useBoardWidth } from '../hooks';
-import { colors, radius, spacing } from '../theme';
+import { makeStyles, radius, spacing } from '../theme';
 
 interface Props {
   state: GameState;
@@ -66,6 +66,7 @@ function incomingReport(state: GameState, viewer: PlayerIndex): string[] {
 }
 
 export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn, onQuit }: Props) {
+  const styles = useStyles();
   const width = useBoardWidth();
   const me = state.players[viewer];
   const enemy = state.players[opponentOf(viewer)];
@@ -232,28 +233,28 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   header: { gap: 2 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  title: { color: colors.accent, fontSize: 22, fontWeight: '900' },
-  turn: { color: colors.textDim, fontSize: 14, fontWeight: '600' },
-  fleetCount: { color: colors.textDim, fontSize: 13 },
+  title: { color: p.accent.text, fontSize: 22, fontWeight: '900' },
+  turn: { color: p.ink.secondary, fontSize: 14, fontWeight: '600' },
+  fleetCount: { color: p.ink.secondary, fontSize: 13 },
   report: {
-    backgroundColor: 'rgba(155, 224, 255, 0.12)',
-    borderColor: colors.splash,
+    backgroundColor: p.intel.fill,
+    borderColor: p.intel.stroke,
     borderWidth: 1,
     borderRadius: radius.md,
     padding: spacing.sm,
     gap: 2,
   },
-  reportText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  tabs: { flexDirection: 'row', backgroundColor: colors.panel, borderRadius: radius.md, padding: 3 },
+  reportText: { color: p.ink.primary, fontSize: 13, fontWeight: '600' },
+  tabs: { flexDirection: 'row', backgroundColor: p.surface.raised, borderRadius: radius.md, padding: 3 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radius.sm },
-  tabActive: { backgroundColor: colors.accent },
-  tabText: { color: colors.textDim, fontWeight: '700' },
-  tabTextActive: { color: colors.accentText },
-  status: { color: colors.text, fontSize: 14, textAlign: 'center', minHeight: 20, fontWeight: '600' },
+  tabActive: { backgroundColor: p.accent.fill },
+  tabText: { color: p.ink.secondary, fontWeight: '700' },
+  tabTextActive: { color: p.ink.onAccent },
+  status: { color: p.ink.primary, fontSize: 14, textAlign: 'center', minHeight: 20, fontWeight: '600' },
   maneuverBlock: { gap: spacing.sm },
   log: { gap: 2, paddingHorizontal: spacing.xs },
-  logText: { color: colors.textDim, fontSize: 12 },
-});
+  logText: { color: p.ink.secondary, fontSize: 12 },
+}));

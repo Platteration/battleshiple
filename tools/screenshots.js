@@ -113,6 +113,19 @@ async function run(browser, cfg, errors) {
     colorScheme: cfg.scheme,
     reducedMotion: cfg.motion,
   });
+  // Seed Math.random so fleets, AI choices and therefore every screenshot are
+  // identical between runs. Without this a restyle cannot be proven
+  // pixel-identical, because two runs never show the same board.
+  await context.addInitScript((seed) => {
+    let a = seed >>> 0;
+    Math.random = () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }, Number(process.env.SEED || 20260930));
   const page = await context.newPage();
   page.on('pageerror', (e) => errors.push(`[${label}] PAGEERROR: ${e.message}`));
   page.on('console', (m) => {

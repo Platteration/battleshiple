@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { GameState, PlayerIndex, shipsRemaining } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
-import { colors, radius, spacing } from '../theme';
+import { makeStyles, radius, spacing } from '../theme';
 
 interface Props {
   state: GameState;
@@ -19,6 +19,7 @@ function stats(state: GameState, index: PlayerIndex) {
 }
 
 export function GameOverScreen({ state, onRematch, onHome }: Props) {
+  const styles = useStyles();
   const winner = state.winner ?? 0;
   const winnerName = state.players[winner].name;
   const humanWonVsAi = state.mode === 'ai' && !state.players[winner].isAI;
@@ -57,21 +58,21 @@ export function GameOverScreen({ state, onRematch, onHome }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   hero: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.xs },
-  eyebrow: { color: colors.textDim, textTransform: 'uppercase', letterSpacing: 2 },
-  title: { color: colors.accent, fontSize: 32, fontWeight: '900' },
-  sub: { color: colors.textDim },
+  eyebrow: { color: p.ink.secondary, textTransform: 'uppercase', letterSpacing: 2 },
+  title: { color: p.accent.text, fontSize: 32, fontWeight: '900' },
+  sub: { color: p.ink.secondary },
   table: {
-    backgroundColor: colors.panel,
-    borderColor: colors.panelBorder,
+    backgroundColor: p.surface.raised,
+    borderColor: p.surface.border,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
   },
   row: { flexDirection: 'row' },
-  cell: { flex: 1, color: colors.text, textAlign: 'center', fontSize: 15 },
-  head: { color: colors.accent, fontWeight: '800' },
-  label: { textAlign: 'left', color: colors.textDim },
-});
+  cell: { flex: 1, color: p.ink.primary, textAlign: 'center', fontSize: 15 },
+  head: { color: p.accent.text, fontWeight: '800' },
+  label: { textAlign: 'left', color: p.ink.secondary },
+}));

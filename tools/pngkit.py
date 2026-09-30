@@ -93,3 +93,62 @@ def sd_hull_local(lx, ly, half_len, half_beam):
     beam = max(_beam_at(t, half_beam), 1e-5)
     return max(abs(lx) - beam, abs(ly) - half_len)
 
+
+
+# ---------- PNG input ----------
+def _paeth(a, b, c):
+    p = a + b - c
+    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    return b if pb <= pc else c
+
+def read_png(path):
+    """Decode an 8-bit, non-interlaced PNG to (width, height, channels, bytearray).
+
+    Enough for screenshots and our own assets. Supports grey, grey+alpha, RGB and
+    RGBA, and all five scanline filters (Chromium uses them all).
+    """
+    data = open(path, 'rb').read()
+    if data[:8] != b'\x89PNG\r\n\x1a\n':
+        raise ValueError(f'{path}: not a PNG')
+    pos, idat = 8, bytearray()
+    w = h = depth = ctype = interlace = None
+    while pos < len(data):
+        (length,) = struct.unpack('>I', data[pos:pos + 4])
+        tag = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + length]
+        if tag == b'IHDR':
+            w, h, depth, ctype, _, _, interlace = struct.unpack('>IIBBBBB', body)
+        elif tag == b'IDAT':
+            idat += body
+        elif tag == b'IEND':
+            break
+        pos += 12 + length
+    if depth != 8 or interlace:
+        raise ValueError(f'{path}: only 8-bit non-interlaced PNGs are supported')
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}[ctype]
+    raw = zlib.decompress(bytes(idat))
+    stride = w * channels
+    out = bytearray(h * stride)
+    prev = bytearray(stride)
+    i = 0
+    for y in range(h):
+        ftype = raw[i]
+        line = bytearray(raw[i + 1:i + 1 + stride])
+        i += 1 + stride
+        for x in range(stride):
+            left = line[x - channels] if x >= channels else 0
+            up = prev[x]
+            ul = prev[x - channels] if x >= channels else 0
+            if ftype == 1:
+                line[x] = (line[x] + left) & 0xff
+            elif ftype == 2:
+                line[x] = (line[x] + up) & 0xff
+            elif ftype == 3:
+                line[x] = (line[x] + ((left + up) >> 1)) & 0xff
+            elif ftype == 4:
+                line[x] = (line[x] + _paeth(left, up, ul)) & 0xff
+        out[y * stride:(y + 1) * stride] = line
+        prev = line
+    return w, h, channels, out

@@ -22,7 +22,7 @@ import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { useBoardWidth } from '../hooks';
-import { colors, radius, shipColors, spacing } from '../theme';
+import { makeStyles, radius, spacing, useTheme } from '../theme';
 
 interface Props {
   playerName: string;
@@ -31,6 +31,8 @@ interface Props {
 }
 
 export function SetupScreen({ playerName, onReady, onBack }: Props) {
+  const styles = useStyles();
+  const { palette: p } = useTheme();
   const width = useBoardWidth();
   const [ships, setShips] = useState<Ship[]>([]);
   const [selected, setSelected] = useState<ShipClassId>('carrier');
@@ -133,7 +135,7 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
               }}
               style={[styles.chip, isSel && styles.chipSelected]}
             >
-              <View style={[styles.swatch, { backgroundColor: shipColors[id] }]} />
+              <View style={[styles.swatch, { backgroundColor: p.token.fill[id] }]} />
               <Text style={styles.chipText}>
                 {cls.name} ({cls.length})
               </Text>
@@ -161,10 +163,10 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   header: { gap: 4 },
-  title: { color: colors.accent, fontSize: 20, fontWeight: '800' },
-  message: { color: colors.textDim, fontSize: 13, minHeight: 18 },
+  title: { color: p.accent.text, fontSize: 20, fontWeight: '800' },
+  message: { color: p.ink.secondary, fontSize: 13, minHeight: 18 },
   tray: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     flexDirection: 'row',
@@ -173,15 +175,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: radius.md,
-    backgroundColor: colors.panel,
+    backgroundColor: p.surface.raised,
     borderWidth: 1,
-    borderColor: colors.panelBorder,
+    borderColor: p.surface.border,
   },
-  chipSelected: { borderColor: colors.selected, borderWidth: 2 },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: '600' },
-  chipMark: { color: colors.textDim, fontWeight: '800' },
-  chipMarkDone: { color: colors.success },
+  chipSelected: { borderColor: p.selected, borderWidth: 2 },
+  chipText: { color: p.ink.primary, fontSize: 13, fontWeight: '600' },
+  chipMark: { color: p.ink.secondary, fontWeight: '800' },
+  chipMarkDone: { color: p.signal.success },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   row: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
-});
+}));

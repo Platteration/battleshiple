@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
-import { colors, radius, spacing } from '../theme';
+import { makeStyles, radius, spacing } from '../theme';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 
@@ -14,6 +14,7 @@ interface Props {
 }
 
 export function Button({ title, onPress, variant = 'primary', disabled, style, small }: Props) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="button"
@@ -34,7 +35,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, style, s
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   base: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -48,13 +49,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-  primary: { backgroundColor: colors.accent },
-  secondary: { backgroundColor: colors.panel, borderColor: colors.panelBorder },
-  danger: { backgroundColor: colors.danger },
-  ghost: { backgroundColor: 'transparent', borderColor: colors.panelBorder },
+  primary: { backgroundColor: p.accent.fill },
+  secondary: { backgroundColor: p.surface.raised, borderColor: p.surface.border },
+  danger: { backgroundColor: p.signal.danger },
+  ghost: { backgroundColor: 'transparent', borderColor: p.surface.border },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.35 },
-  text: { color: colors.text, fontWeight: '700', fontSize: 16 },
-  textPrimary: { color: colors.accentText },
+  text: { color: p.ink.primary, fontWeight: '700', fontSize: 16 },
+  textPrimary: { color: p.ink.onAccent },
   textSmall: { fontSize: 14 },
-});
+}));

@@ -4,7 +4,7 @@ import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
-import { colors, radius, shipColors, spacing } from '../theme';
+import { makeStyles, radius, spacing, useTheme } from '../theme';
 
 interface Props {
   difficulty: Difficulty;
@@ -27,6 +27,8 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
 };
 
 export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: Props) {
+  const styles = useStyles();
+  const { palette: p } = useTheme();
   const [showRules, setShowRules] = useState(false);
   return (
     <Screen>
@@ -77,7 +79,7 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: 
               const cls = SHIP_CLASSES[id];
               return (
                 <View key={id} style={styles.tableRow}>
-                  <View style={[styles.swatch, { backgroundColor: shipColors[id] }]} />
+                  <View style={[styles.swatch, { backgroundColor: p.token.fill[id] }]} />
                   <Text style={[styles.cell, styles.cellName]}>{cls.name}</Text>
                   <Text style={styles.cell}>Size {cls.length}</Text>
                   <Text style={styles.cell}>Moves {cls.mobility}</Text>
@@ -98,34 +100,34 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   hero: { alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
-  title: { color: colors.accent, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
-  subtitle: { color: colors.textDim, fontSize: 15, textAlign: 'center' },
+  title: { color: p.accent.text, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
+  subtitle: { color: p.ink.secondary, fontSize: 15, textAlign: 'center' },
   resume: {
-    backgroundColor: colors.panel,
-    borderColor: colors.accent,
+    backgroundColor: p.surface.raised,
+    borderColor: p.accent.fill,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  resumeLabel: { color: colors.accent, fontWeight: '800', fontSize: 14 },
-  resumeMeta: { color: colors.textDim, fontSize: 13 },
-  blurb: { color: colors.textDim, fontSize: 13, marginTop: -spacing.xs },
+  resumeLabel: { color: p.accent.text, fontWeight: '800', fontSize: 14 },
+  resumeMeta: { color: p.ink.secondary, fontSize: 13 },
+  blurb: { color: p.ink.secondary, fontSize: 13, marginTop: -spacing.xs },
   rules: {
-    backgroundColor: colors.panel,
-    borderColor: colors.panelBorder,
+    backgroundColor: p.surface.raised,
+    borderColor: p.surface.border,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,
   },
-  h2: { color: colors.accent, fontWeight: '800', fontSize: 15, marginTop: spacing.sm },
-  p: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  h2: { color: p.accent.text, fontWeight: '800', fontSize: 15, marginTop: spacing.sm },
+  p: { color: p.ink.primary, fontSize: 14, lineHeight: 20 },
   table: { gap: 4, marginTop: spacing.xs },
   tableRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
-  cell: { color: colors.textDim, fontSize: 12, flex: 1 },
-  cellName: { color: colors.text, fontWeight: '700', flex: 1.4 },
-});
+  cell: { color: p.ink.secondary, fontSize: 12, flex: 1 },
+  cellName: { color: p.ink.primary, fontWeight: '700', flex: 1.4 },
+}));

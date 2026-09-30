@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { Quadrant } from '../../engine';
-import { colors } from '../theme';
+import { makeStyles } from '../theme';
 
 interface Props {
   /** Pixel size of the 10x10 playing area (excluding labels). */
@@ -17,6 +17,7 @@ function centerOf(q: Quadrant, size: number): { x: number; y: number } {
 }
 
 function Ripple({ x, y, diameter, delay }: { x: number; y: number; diameter: number; delay: number }) {
+  const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -72,11 +73,11 @@ export function SplashOverlay({ size, quadrants }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ palette: p }) => ({
   ripple: {
     position: 'absolute',
     borderWidth: 3,
-    borderColor: colors.splash,
-    backgroundColor: 'rgba(155, 224, 255, 0.12)',
+    borderColor: p.intel.stroke,
+    backgroundColor: p.intel.fill,
   },
-});
+}));

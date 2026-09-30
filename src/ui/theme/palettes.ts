@@ -66,7 +66,8 @@ export const dark: Palette = {
     grid: '#86a6ab',
     label: '#b7c2c7',
     sectorLine: '#b7c2c7',
-    sectorLabel: '#b7c2c7',
+    // Text: #b7c2c7 measured 4.43:1 on the water, under the 4.5:1 floor.
+    sectorLabel: '#bec8cc',
   },
   pencil: {
     hit: '#ef9290',

@@ -37,6 +37,7 @@ cooldown, so wounded ships are slow to escape.
 
 ### Splashes
 
+Both boards are divided into the four quadrants, labelled NW, NE, SW and SE.
 When a ship moves, its opponent sees animated ripples in the quadrant
 (NW / NE / SW / SE) containing the ship's new midpoint, for the duration of
 their next turn. The mover's own log records the full manoeuvre; the opponent
@@ -45,8 +46,8 @@ only ever sees the splash.
 ### Shot markers
 
 Because ships move, you may fire at the same cell more than once. The tracking
-board shows the latest result for each cell and fades older markers, so a stale
-hit is a hint rather than a certainty.
+board shows the latest result for each cell, and a marker older than your last
+two turns turns grey, so a stale hit is a hint rather than a certainty.
 
 ## Modes
 

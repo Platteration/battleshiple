@@ -34,18 +34,19 @@ export interface CellView {
 
 export type Grid = CellView[][];
 
-export function emptyGrid(): Grid {
+/** A blank board `size` cells square. Everything that draws a grid reads its size from `grid.length`. */
+export function emptyGrid(size: number = BOARD_SIZE): Grid {
   const grid: Grid = [];
-  for (let r = 0; r < BOARD_SIZE; r++) {
+  for (let r = 0; r < size; r++) {
     const row: CellView[] = [];
-    for (let c = 0; c < BOARD_SIZE; c++) row.push({});
+    for (let c = 0; c < size; c++) row.push({});
     grid.push(row);
   }
   return grid;
 }
 
 /**
- * The view of the cell at `c` in a grid from `emptyGrid`, BOARD_SIZE square.
+ * The view of the cell at `c` in a grid from `emptyGrid`.
  * `c` must be on the board, and everything painted through here is: the engine
  * never moves a hull or fires a shot off it, a target is a cell someone tapped,
  * a preview is bounds-checked before it gets here, and `src/storage.ts` refuses
@@ -77,7 +78,7 @@ export function paintShips(grid: Grid, ships: readonly Ship[], selectedId?: stri
 
 export function paintPreview(grid: Grid, cells: readonly Coord[], ok: boolean): void {
   for (const c of cells) {
-    if (c.r < 0 || c.c < 0 || c.r >= BOARD_SIZE || c.c >= BOARD_SIZE) continue;
+    if (c.r < 0 || c.c < 0 || c.r >= grid.length || c.c >= grid.length) continue;
     cellOn(grid, c).preview = ok ? 'ok' : 'bad';
   }
 }

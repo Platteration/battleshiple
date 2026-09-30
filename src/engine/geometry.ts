@@ -44,8 +44,9 @@ export function shipCells(bow: Coord, heading: Heading, length: number): Coord[]
   return cells;
 }
 
-export function quadrantOf(c: Coord): Quadrant {
-  const half = BOARD_SIZE / 2;
+/** The quadrant of a board `size` cells square; the boundary is at half the size. */
+export function quadrantOf(c: Coord, size: number = BOARD_SIZE): Quadrant {
+  const half = size / 2;
   const south = c.r >= half;
   const east = c.c >= half;
   if (south) return east ? 'SE' : 'SW';

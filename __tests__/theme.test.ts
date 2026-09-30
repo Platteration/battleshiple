@@ -85,7 +85,8 @@ function pairings(p: Palette): [string, string, string, number][] {
     ['coordinates on paper', p.board.label, p.surface.base, TEXT_MIN],
     ['grid on water', p.board.grid, p.board.water, GRAPHIC_MIN],
     ['quadrant dividers on water', p.board.sectorLine, p.board.water, GRAPHIC_MIN],
-    ['sector labels on water', p.board.sectorLabel, p.board.water, GRAPHIC_MIN],
+    // Text (NW, NE, SW, SE), so the text floor, not the graphic one.
+    ['sector labels on water', p.board.sectorLabel, p.board.water, TEXT_MIN],
     ['hit mark on water', p.pencil.hit, p.board.water, GRAPHIC_MIN],
     ['miss mark on water', p.pencil.miss, p.board.water, GRAPHIC_MIN],
     ['aged mark on water', p.pencil.aged, p.board.water, GRAPHIC_MIN],

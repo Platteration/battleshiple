@@ -163,10 +163,10 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   header: { gap: 4 },
-  title: { color: p.accent.text, fontSize: 20, fontWeight: '800' },
-  message: { color: p.ink.secondary, fontSize: 13, minHeight: 18 },
+  title: { ...ty.title, color: p.accent.text },
+  message: { ...ty.caption, color: p.ink.secondary, minHeight: 18 },
   tray: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     flexDirection: 'row',
@@ -180,8 +180,8 @@ const useStyles = makeStyles(({ palette: p }) => ({
     borderColor: p.surface.border,
   },
   chipSelected: { borderColor: p.selected, borderWidth: 2 },
-  chipText: { color: p.ink.primary, fontSize: 13, fontWeight: '600' },
-  chipMark: { color: p.ink.secondary, fontWeight: '800' },
+  chipText: { ...ty.caption, color: p.ink.primary },
+  chipMark: { ...ty.label, color: p.ink.secondary },
   chipMarkDone: { color: p.signal.success },
   swatch: { width: 10, height: 10, borderRadius: 2 },
   row: { flexDirection: 'row', gap: spacing.sm },

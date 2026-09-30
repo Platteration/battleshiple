@@ -38,6 +38,9 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
             opacity: s.sunk ? 0.9 : s.ready ? 1 : 0.6,
             margin: 1,
             borderRadius: 3,
+            // Brass alone is ~2.4:1 on water; the ink outline carries the shape.
+            borderWidth: 1,
+            borderColor: p.token.stroke,
           },
           s.selected && styles.selectedShip,
         ]}
@@ -146,11 +149,11 @@ export function Board({ grid, width, onPressCell, splashes = [], disabled }: Pro
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   wrapper: { alignSelf: 'center' },
   row: { flexDirection: 'row' },
   label: { alignItems: 'center', justifyContent: 'center' },
-  labelText: { color: p.ink.secondary, fontWeight: '600' },
+  labelText: { ...ty.coord, color: p.board.label },
   cell: {
     backgroundColor: p.board.water,
     borderWidth: StyleSheet.hairlineWidth,

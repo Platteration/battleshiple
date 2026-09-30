@@ -73,7 +73,7 @@ export function SplashOverlay({ size, quadrants }: Props) {
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   ripple: {
     position: 'absolute',
     borderWidth: 3,

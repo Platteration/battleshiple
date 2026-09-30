@@ -1,6 +1,6 @@
 import { ShipClassId } from '../../engine';
 
-export type PaletteName = 'legacy' | 'day' | 'night';
+export type PaletteName = 'day' | 'night';
 
 /**
  * Semantic colour roles. Components ask for a role ("the ink for secondary

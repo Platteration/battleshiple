@@ -1,3 +1,4 @@
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
@@ -19,14 +20,33 @@ import {
   maneuver,
   randomFleet,
 } from './src/engine';
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, Settings } from './src/settings';
 import { clearGame, loadGame, saveGame } from './src/storage';
-import { ThemeProvider } from './src/ui/theme';
+import { Lamp, ThemeProvider, useFirstPaintReady, useTheme } from './src/ui/theme';
 import { feedback } from './src/ui/feedback';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
 import { HandoffScreen } from './src/ui/screens/HandoffScreen';
 import { HomeScreen } from './src/ui/screens/HomeScreen';
 import { SetupScreen } from './src/ui/screens/SetupScreen';
+
+// Best-effort: web and test environments have no native splash to hold.
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+/** Status bar content that reads on the current palette's paper. */
+function ThemedStatusBar() {
+  const { palette } = useTheme();
+  return <StatusBar style={palette.statusBar} />;
+}
+
+/** Lifts the native splash once fonts are in, or after a short timeout. */
+function SplashGate() {
+  const ready = useFirstPaintReady();
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+  return null;
+}
 
 type Screen =
   | { name: 'home' }
@@ -55,6 +75,25 @@ function describeSave(state: GameState, savedAt: number): string {
 export default function App() {
   const [mode, setMode] = useState<GameMode>('ai');
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+
+  useEffect(() => {
+    let alive = true;
+    void loadSettings().then((s) => {
+      if (alive) setSettings(s);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const onLampChange = useCallback((lamp: Lamp) => {
+    setSettings((prev) => {
+      const next = { ...prev, lamp };
+      void saveSettings(next);
+      return next;
+    });
+  }, []);
   const [screen, setScreen] = useState<Screen>({ name: 'home' });
   const [fleets, setFleets] = useState<[Ship[] | null, Ship[] | null]>([null, null]);
   const [game, setGame] = useState<GameState | null>(null);
@@ -245,6 +284,8 @@ export default function App() {
     <HomeScreen
       difficulty={difficulty}
       onDifficultyChange={setDifficulty}
+      lamp={settings.lamp}
+      onLampChange={onLampChange}
       onStart={startSetup}
       resume={saved ? { label: saved.label, onResume, onDiscard: onDiscardSave } : undefined}
     />
@@ -299,8 +340,9 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <StatusBar style="light" />
+      <ThemeProvider lamp={settings.lamp}>
+        <ThemedStatusBar />
+        <SplashGate />
         {content}
       </ThemeProvider>
     </SafeAreaProvider>

@@ -57,7 +57,7 @@ export function FleetStatus({ ships, selectedId, onSelect, compact }: Props) {
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   strip: { paddingHorizontal: spacing.sm, gap: spacing.sm },
   card: {
     backgroundColor: p.surface.raised,
@@ -72,13 +72,13 @@ const useStyles = makeStyles(({ palette: p }) => ({
   cardSunk: { opacity: 0.5 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
-  name: { color: p.ink.primary, fontWeight: '700', fontSize: 13 },
+  name: { ...ty.action, fontSize: 13, lineHeight: 17, color: p.ink.primary },
   segments: { flexDirection: 'row', gap: 3, marginTop: 6 },
   segment: { width: 12, height: 8, borderRadius: 2, backgroundColor: p.signal.success },
   segmentHit: { backgroundColor: p.pencil.hit },
   segmentSunk: { backgroundColor: p.token.sunk },
-  meta: { color: p.ink.secondary, fontSize: 11, marginTop: 6 },
-  status: { color: p.ink.secondary, fontSize: 12, marginTop: 4, fontWeight: '600' },
+  meta: { ...ty.caption, fontSize: 11, lineHeight: 14, color: p.ink.secondary, marginTop: 6 },
+  status: { ...ty.label, color: p.ink.secondary, marginTop: 4 },
   statusReady: { color: p.signal.success },
   statusSunk: { color: p.signal.danger },
 }));

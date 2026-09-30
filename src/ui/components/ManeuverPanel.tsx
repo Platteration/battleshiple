@@ -116,7 +116,7 @@ export function ManeuverPanel({ ship, fleet, pending, onPick, onConfirm, onCance
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   panel: {
     backgroundColor: p.surface.raised,
     borderColor: p.surface.border,
@@ -126,10 +126,10 @@ const useStyles = makeStyles(({ palette: p }) => ({
     gap: spacing.sm,
   },
   header: { gap: 2 },
-  title: { color: p.ink.primary, fontWeight: '800', fontSize: 16 },
-  meta: { color: p.ink.secondary, fontSize: 12 },
-  blocked: { color: p.signal.danger, fontSize: 12, fontWeight: '700' },
+  title: { ...ty.heading, color: p.ink.primary },
+  meta: { ...ty.caption, color: p.ink.secondary },
+  blocked: { ...ty.label, color: p.signal.danger },
   row: { flexDirection: 'row', gap: spacing.sm },
   flex: { flex: 1 },
-  hint: { color: p.ink.secondary, fontSize: 12, textAlign: 'center' },
+  hint: { ...ty.caption, color: p.ink.secondary, textAlign: 'center' },
 }));

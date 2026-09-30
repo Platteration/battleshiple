@@ -1,78 +1,154 @@
 import { Palette } from './tokens';
 
 /**
- * Exactly the colours the app shipped with before the restyle. It exists so the
- * move onto semantic tokens can be proven pixel-identical before anything is
- * allowed to change.
+ * The plotting room by day: an admiralty-style chart under ordinary light.
+ *
+ * Every pairing the UI relies on is checked in __tests__/theme.test.ts
+ * against WCAG (4.5:1 for text, 3:1 for marks and lines), so a colour change
+ * that looks fine on one screen cannot quietly break legibility on another.
  */
-export const legacy: Palette = {
-  name: 'legacy',
-  statusBar: 'light',
+export const day: Palette = {
+  name: 'day',
+  statusBar: 'dark',
   surface: {
-    base: '#061a2b',
-    raised: '#0b2740',
-    border: '#164466',
-    scrim: 'rgba(0, 0, 0, 0.5)',
+    base: '#EFE6D2', // chart paper
+    raised: '#F7F2E6', // index card
+    border: '#C9BC9C',
+    scrim: 'rgba(27, 42, 65, 0.45)',
   },
   ink: {
-    primary: '#e6f1fb',
-    secondary: '#8fb3d1',
-    onAccent: '#1a1a1a',
+    primary: '#1B2A41', // navy ink, 11.6:1 on paper
+    secondary: '#4A5568',
+    onAccent: '#EFE6D2',
   },
   accent: {
-    fill: '#ffd166',
-    text: '#ffd166',
+    fill: '#1B2A41',
+    // Grease-pencil red darkened for text: #B83A2E is only 4.59:1 on paper.
+    text: '#A8322A',
   },
   signal: {
-    danger: '#ff4d4d',
-    success: '#3ddc97',
+    danger: '#A8322A',
+    success: '#2F6B4F',
   },
   board: {
-    water: '#0e3a5c',
-    grid: '#1b5280',
-    label: '#8fb3d1',
-    sectorLine: '#1b5280',
-    sectorLabel: '#8fb3d1',
+    water: '#E3E6DA',
+    grid: '#857D69',
+    label: '#4A5568',
+    sectorLine: '#1B2A41',
+    sectorLabel: '#6E6A62',
   },
   pencil: {
-    hit: '#ff4d4d',
-    miss: '#cfe8ff',
-    aged: '#cfe8ff',
-    target: '#ffd166',
-    hitHalo: 'transparent',
+    hit: '#B83A2E', // marks only need 3:1
+    miss: '#2E3A4E',
+    aged: '#6E6A62', // graphite: old marks change colour, never opacity
+    target: '#A8322A',
+    hitHalo: '#EFE6D2', // a red X on brass is 1.8:1 without this
   },
   token: {
+    // Brass alone is 2.5:1 on paper, so tokens are always ink-outlined. The
+    // slight per-class variation is a secondary cue; silhouettes carry identity.
     fill: {
-      carrier: '#8e9aaf',
-      battleship: '#b08968',
-      destroyer: '#6c9a8b',
-      submarine: '#7d5ba6',
-      patrol: '#e0a458',
+      carrier: '#B8893B',
+      battleship: '#A07A45',
+      destroyer: '#B09058',
+      submarine: '#8C7658',
+      patrol: '#C9A25A',
     },
-    stroke: 'transparent',
-    sunk: '#3a3f47',
-    mark: 'rgba(0, 0, 0, 0.65)',
+    stroke: '#1B2A41',
+    sunk: '#8A8478',
+    mark: '#1B2A41',
   },
   intel: {
-    stroke: '#9be0ff',
-    fill: 'rgba(155, 224, 255, 0.12)',
+    stroke: '#7A5718', // dark brass, 5.2:1 on water
+    fill: 'rgba(184, 137, 59, 0.16)',
   },
   preview: {
-    // Cyan, not green: green collided with the Destroyer's hull colour, so a
-    // manoeuvre preview was easy to read as another ship.
-    okFill: 'rgba(155, 224, 255, 0.50)',
-    okStroke: '#9be0ff',
-    badFill: 'rgba(255, 77, 77, 0.50)',
-    badStroke: '#ff4d4d',
+    okFill: 'rgba(27, 42, 65, 0.16)',
+    okStroke: '#1B2A41',
+    badFill: 'rgba(168, 50, 42, 0.18)',
+    badStroke: '#A8322A',
   },
   stamp: {
-    ink: '#ff4d4d',
+    ink: '#A8322A',
   },
-  selected: '#ffd166',
+  selected: '#A8322A',
   grain: {
-    tint: 'transparent',
-    opacity: 0,
+    tint: '#1B2A41',
+    opacity: 0.07,
   },
 };
 
-export const palettes = { legacy } as const;
+/**
+ * The plotting room at night, lit by red lamps as real operations rooms were
+ * to preserve night vision. Red-monochrome, so nothing may rely on hue: hit and
+ * miss differ by shape, ship classes by silhouette.
+ */
+export const night: Palette = {
+  name: 'night',
+  statusBar: 'light',
+  surface: {
+    base: '#140807',
+    raised: '#1C0B09',
+    border: '#4A1A12',
+    scrim: 'rgba(0, 0, 0, 0.6)',
+  },
+  ink: {
+    primary: '#F2A08A',
+    secondary: '#C86A52',
+    onAccent: '#140807',
+  },
+  accent: {
+    fill: '#F2A08A',
+    text: '#FF7A5C',
+  },
+  signal: {
+    danger: '#FF7A5C',
+    success: '#D9954F', // no green under a red lamp
+  },
+  board: {
+    water: '#1A0A08',
+    grid: '#A84434',
+    label: '#C86A52',
+    sectorLine: '#C0553C',
+    sectorLabel: '#AA4636',
+  },
+  pencil: {
+    hit: '#FFD2C2',
+    miss: '#C86A52',
+    aged: '#B04A36',
+    target: '#FF7A5C',
+    hitHalo: '#140807',
+  },
+  token: {
+    fill: {
+      carrier: '#3A1510',
+      battleship: '#40170F',
+      destroyer: '#361310',
+      submarine: '#2E100C',
+      patrol: '#44190F',
+    },
+    stroke: '#D9954F',
+    sunk: '#241008',
+    mark: '#D9954F',
+  },
+  intel: {
+    stroke: '#D9954F',
+    fill: 'rgba(217, 149, 79, 0.14)',
+  },
+  preview: {
+    okFill: 'rgba(242, 160, 138, 0.18)',
+    okStroke: '#F2A08A',
+    badFill: 'rgba(255, 122, 92, 0.2)',
+    badStroke: '#FF7A5C',
+  },
+  stamp: {
+    ink: '#FF7A5C',
+  },
+  selected: '#FF7A5C',
+  grain: {
+    tint: '#000000',
+    opacity: 0.22,
+  },
+};
+
+export const palettes = { day, night } as const;

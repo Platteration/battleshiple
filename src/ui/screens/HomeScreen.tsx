@@ -4,15 +4,23 @@ import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
-import { makeStyles, radius, spacing, useTheme } from '../theme';
+import { Lamp, makeStyles, radius, spacing, useTheme } from '../theme';
 
 interface Props {
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
+  lamp: Lamp;
+  onLampChange: (lamp: Lamp) => void;
   onStart: (mode: GameMode) => void;
   /** Present when an unfinished game is on disk. */
   resume?: { label: string; onResume: () => void; onDiscard: () => void };
 }
+
+const LAMPS: { value: Lamp; label: string }[] = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'day', label: 'Day' },
+  { value: 'night', label: 'Night' },
+];
 
 const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'easy', label: 'Easy' },
@@ -26,7 +34,7 @@ const DIFFICULTY_BLURB: Record<Difficulty, string> = {
   hard: 'Reads your splashes to hunt the quadrant you moved into.',
 };
 
-export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: Props) {
+export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume, lamp, onLampChange }: Props) {
   const styles = useStyles();
   const { palette: p } = useTheme();
   const [showRules, setShowRules] = useState(false);
@@ -52,6 +60,8 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: 
       <Button title="Play vs Computer" onPress={() => onStart('ai')} />
       <Button title="Pass & Play (2 players)" variant="secondary" onPress={() => onStart('local')} />
       <Button title={showRules ? 'Hide rules' : 'How to play'} variant="ghost" onPress={() => setShowRules((v) => !v)} />
+
+      <Segmented label="Plotting lamp" options={LAMPS} value={lamp} onChange={onLampChange} />
 
       {showRules && (
         <View style={styles.rules}>
@@ -100,10 +110,10 @@ export function HomeScreen({ difficulty, onDifficultyChange, onStart, resume }: 
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   hero: { alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
-  title: { color: p.accent.text, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
-  subtitle: { color: p.ink.secondary, fontSize: 15, textAlign: 'center' },
+  title: { ...ty.display, color: p.accent.text },
+  subtitle: { ...ty.body, color: p.ink.secondary, textAlign: 'center' },
   resume: {
     backgroundColor: p.surface.raised,
     borderColor: p.accent.fill,
@@ -112,9 +122,9 @@ const useStyles = makeStyles(({ palette: p }) => ({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  resumeLabel: { color: p.accent.text, fontWeight: '800', fontSize: 14 },
-  resumeMeta: { color: p.ink.secondary, fontSize: 13 },
-  blurb: { color: p.ink.secondary, fontSize: 13, marginTop: -spacing.xs },
+  resumeLabel: { ...ty.label, color: p.accent.text },
+  resumeMeta: { ...ty.caption, color: p.ink.secondary },
+  blurb: { ...ty.caption, color: p.ink.secondary, marginTop: -spacing.xs },
   rules: {
     backgroundColor: p.surface.raised,
     borderColor: p.surface.border,
@@ -123,11 +133,11 @@ const useStyles = makeStyles(({ palette: p }) => ({
     padding: spacing.lg,
     gap: spacing.sm,
   },
-  h2: { color: p.accent.text, fontWeight: '800', fontSize: 15, marginTop: spacing.sm },
-  p: { color: p.ink.primary, fontSize: 14, lineHeight: 20 },
+  h2: { ...ty.title, fontSize: 18, lineHeight: 24, color: p.accent.text, marginTop: spacing.sm },
+  p: { ...ty.body, color: p.ink.primary },
   table: { gap: 4, marginTop: spacing.xs },
   tableRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
-  cell: { color: p.ink.secondary, fontSize: 12, flex: 1 },
-  cellName: { color: p.ink.primary, fontWeight: '700', flex: 1.4 },
+  cell: { ...ty.caption, fontSize: 12, lineHeight: 16, color: p.ink.secondary, flex: 1 },
+  cellName: { ...ty.action, fontSize: 12, lineHeight: 16, color: p.ink.primary, flex: 1.4 },
 }));

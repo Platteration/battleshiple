@@ -29,7 +29,7 @@ export function Screen({ children, scroll = true, style }: Props) {
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   root: { flex: 1, backgroundColor: p.surface.base },
   content: { gap: spacing.md },
 }));

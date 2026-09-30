@@ -39,12 +39,12 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   wrap: { gap: 6 },
-  label: { color: p.ink.secondary, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  label: { ...ty.label, color: p.ink.secondary },
   bar: { flexDirection: 'row', backgroundColor: p.surface.raised, borderRadius: radius.md, padding: 3 },
   segment: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: radius.sm },
   segmentActive: { backgroundColor: p.accent.fill },
-  text: { color: p.ink.secondary, fontWeight: '700', fontSize: 14 },
+  text: { ...ty.action, fontSize: 14, lineHeight: 18, color: p.ink.secondary },
   textActive: { color: p.ink.onAccent },
 }));

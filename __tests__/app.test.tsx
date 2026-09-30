@@ -390,4 +390,12 @@ describe('App', () => {
       spy.mockRestore();
     }
   });
+
+  test('the plotting lamp can be switched and is remembered', async () => {
+    const root = renderer.root;
+    pressText(root, 'Night');
+    await flush();
+    const saved = await AsyncStorage.getItem('battleshiple:settings:v1');
+    expect(JSON.parse(saved as string).settings.lamp).toBe('night');
+  });
 });

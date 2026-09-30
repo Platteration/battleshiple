@@ -233,12 +233,12 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   header: { gap: 2 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  title: { color: p.accent.text, fontSize: 22, fontWeight: '900' },
-  turn: { color: p.ink.secondary, fontSize: 14, fontWeight: '600' },
-  fleetCount: { color: p.ink.secondary, fontSize: 13 },
+  title: { ...ty.title, color: p.accent.text },
+  turn: { ...ty.label, color: p.ink.secondary },
+  fleetCount: { ...ty.caption, color: p.ink.secondary },
   report: {
     backgroundColor: p.intel.fill,
     borderColor: p.intel.stroke,
@@ -247,14 +247,14 @@ const useStyles = makeStyles(({ palette: p }) => ({
     padding: spacing.sm,
     gap: 2,
   },
-  reportText: { color: p.ink.primary, fontSize: 13, fontWeight: '600' },
+  reportText: { ...ty.teletype, color: p.ink.primary },
   tabs: { flexDirection: 'row', backgroundColor: p.surface.raised, borderRadius: radius.md, padding: 3 },
   tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radius.sm },
   tabActive: { backgroundColor: p.accent.fill },
-  tabText: { color: p.ink.secondary, fontWeight: '700' },
+  tabText: { ...ty.action, fontSize: 14, lineHeight: 18, color: p.ink.secondary },
   tabTextActive: { color: p.ink.onAccent },
-  status: { color: p.ink.primary, fontSize: 14, textAlign: 'center', minHeight: 20, fontWeight: '600' },
+  status: { ...ty.heading, fontSize: 15, lineHeight: 20, color: p.ink.primary, textAlign: 'center', minHeight: 20 },
   maneuverBlock: { gap: spacing.sm },
   log: { gap: 2, paddingHorizontal: spacing.xs },
-  logText: { color: p.ink.secondary, fontSize: 12 },
+  logText: { ...ty.teletype, fontSize: 12, lineHeight: 16, color: p.ink.secondary },
 }));

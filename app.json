@@ -5,8 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#061a2b",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#EFE6D2",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.platteration.battleshiple"
@@ -32,9 +32,14 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#061a2b"
+          "backgroundColor": "#EFE6D2",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#140807"
+          }
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

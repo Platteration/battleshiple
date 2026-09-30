@@ -35,7 +35,7 @@ export function Button({ title, onPress, variant = 'primary', disabled, style, s
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   base: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -55,7 +55,7 @@ const useStyles = makeStyles(({ palette: p }) => ({
   ghost: { backgroundColor: 'transparent', borderColor: p.surface.border },
   pressed: { opacity: 0.75 },
   disabled: { opacity: 0.35 },
-  text: { color: p.ink.primary, fontWeight: '700', fontSize: 16 },
+  text: { ...ty.action, color: p.ink.primary },
   textPrimary: { color: p.ink.onAccent },
-  textSmall: { fontSize: 14 },
+  textSmall: { fontSize: 14, lineHeight: 18 },
 }));

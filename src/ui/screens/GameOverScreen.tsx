@@ -58,10 +58,10 @@ export function GameOverScreen({ state, onRematch, onHome }: Props) {
   );
 }
 
-const useStyles = makeStyles(({ palette: p }) => ({
+const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   hero: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.xs },
-  eyebrow: { color: p.ink.secondary, textTransform: 'uppercase', letterSpacing: 2 },
-  title: { color: p.accent.text, fontSize: 32, fontWeight: '900' },
+  eyebrow: { ...ty.label, color: p.ink.secondary },
+  title: { ...ty.display, color: p.accent.text, textAlign: 'center' },
   sub: { color: p.ink.secondary },
   table: {
     backgroundColor: p.surface.raised,
@@ -72,7 +72,7 @@ const useStyles = makeStyles(({ palette: p }) => ({
     gap: spacing.sm,
   },
   row: { flexDirection: 'row' },
-  cell: { flex: 1, color: p.ink.primary, textAlign: 'center', fontSize: 15 },
-  head: { color: p.accent.text, fontWeight: '800' },
+  cell: { ...ty.body, flex: 1, color: p.ink.primary, textAlign: 'center' },
+  head: { ...ty.label, color: p.accent.text },
   label: { textAlign: 'left', color: p.ink.secondary },
 }));

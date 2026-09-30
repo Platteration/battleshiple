@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
@@ -18,6 +18,7 @@ import {
   fire,
   maneuver,
   randomFleet,
+  toPlayerView,
 } from './src/engine';
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, Settings } from './src/settings';
 import { clearGame, loadGame, saveGame } from './src/storage';
@@ -122,6 +123,10 @@ export default function App() {
     });
     return () => sub.remove();
   }, [game, difficulty]);
+
+  // The game screen gets the viewer's redacted view, never both fleets. In
+  // vs-Computer the human is always player 0; in pass-and-play, whoever's turn.
+  const view = useMemo(() => (game ? toPlayerView(game, game.mode === 'ai' ? 0 : game.current) : null), [game]);
 
   const names = playerNames(mode);
 
@@ -302,10 +307,9 @@ export default function App() {
       );
       break;
     case 'game':
-      content = game ? (
+      content = view ? (
         <GameScreen
-          state={game}
-          viewer={game.mode === 'ai' ? 0 : game.current}
+          view={view}
           busy={aiBusy}
           onFire={onFire}
           onManeuver={onManeuver}

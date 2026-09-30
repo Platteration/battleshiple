@@ -2,20 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Coord,
-  GameState,
   Maneuver,
-  PlayerIndex,
+  PlayerView,
   QUADRANT_NAMES,
   SHIP_CLASSES,
   Ship,
+  afloatCount,
   checkManeuver,
   coordLabel,
   isSunk,
-  opponentOf,
   projectedCells,
   shipAt,
   shipsRemaining,
-  visibleLog,
 } from '../../engine';
 import { buildFleetView, buildTrackingView } from '../boardView';
 import { Board } from '../components/Board';
@@ -27,8 +25,11 @@ import { useBoardWidth } from '../hooks';
 import { makeStyles, radius, spacing } from '../theme';
 
 interface Props {
-  state: GameState;
-  viewer: PlayerIndex;
+  /**
+   * The viewer's redacted view, never the whole GameState: an opponent ship
+   * still afloat has no position here, so this screen cannot draw one.
+   */
+  view: PlayerView;
   busy?: boolean;
   onFire: (coord: Coord) => void;
   onManeuver: (shipId: string, m: Maneuver) => void;
@@ -39,14 +40,13 @@ interface Props {
 type Tab = 'enemy' | 'fleet';
 
 /** What happened to the viewer since their last turn, phrased without leaking enemy moves. */
-function incomingReport(state: GameState, viewer: PlayerIndex): string[] {
-  const me = state.players[viewer];
-  const enemy = state.players[opponentOf(viewer)];
+function incomingReport(view: PlayerView): string[] {
+  const { me, enemy } = view;
   const lines: string[] = [];
   // Read the snapshot taken when the shot landed. Deriving this from live hulls
   // instead misreports the moment you evade with the ship that was just hit.
   const hit = me.lastIncoming;
-  if (hit && hit.turn === state.turn - 1) {
+  if (hit && hit.turn === view.turn - 1) {
     const label = coordLabel(hit);
     if (hit.result === 'miss') {
       lines.push(`${enemy.name} fired at ${label} and missed.`);
@@ -65,13 +65,12 @@ function incomingReport(state: GameState, viewer: PlayerIndex): string[] {
   return lines;
 }
 
-export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn, onQuit }: Props) {
+export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }: Props) {
   const styles = useStyles();
   const width = useBoardWidth();
-  const me = state.players[viewer];
-  const enemy = state.players[opponentOf(viewer)];
-  const myTurn = state.current === viewer && !busy;
-  const phase = state.phase;
+  const { me, enemy, viewer } = view;
+  const myTurn = view.current === viewer && !busy;
+  const phase = view.phase;
 
   const [tab, setTab] = useState<Tab>('enemy');
   const [target, setTarget] = useState<Coord | undefined>();
@@ -88,7 +87,7 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
     }
     setSelectedShipId(undefined);
     setPending(null);
-  }, [phase, state.turn]);
+  }, [phase, view.turn]);
 
   const selectedShip: Ship | undefined = me.ships.find((s) => s.id === selectedShipId);
   const preview = useMemo(() => {
@@ -96,15 +95,15 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
     return { cells: projectedCells(selectedShip, pending), ok: checkManeuver(selectedShip, pending, me.ships).ok };
   }, [selectedShip, pending, me.ships]);
 
-  const trackingGrid = useMemo(() => buildTrackingView(me, enemy, state.turn, target), [me, enemy, state.turn, target]);
+  const trackingGrid = useMemo(() => buildTrackingView(view, target), [view, target]);
   const fleetGrid = useMemo(
-    () => buildFleetView(me, enemy, state.turn, { selectedShipId, preview }),
-    [me, enemy, state.turn, selectedShipId, preview],
+    () => buildFleetView(view, { selectedShipId, preview }),
+    [view, selectedShipId, preview],
   );
 
-  const report = useMemo(() => incomingReport(state, viewer), [state, viewer]);
-  const recentLog = useMemo(() => visibleLog(state, viewer).slice(-4).reverse(), [state, viewer]);
-  const hasMoved = !!state.maneuveredShipId;
+  const report = useMemo(() => incomingReport(view), [view]);
+  const recentLog = useMemo(() => view.log.slice(-4).reverse(), [view]);
+  const hasMoved = !!view.maneuveredShipId;
 
   function onPressEnemyCell(coord: Coord) {
     if (!myTurn || phase !== 'fire') return;
@@ -127,7 +126,7 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
     }
   }
 
-  const lastShot = state.lastShot;
+  const lastShot = view.lastShot;
   let statusLine = '';
   if (busy) statusLine = `${enemy.name} is taking their turn…`;
   else if (phase === 'fire') statusLine = target ? `Target ${coordLabel(target)} locked. Fire when ready.` : 'Choose a target in enemy waters.';
@@ -140,7 +139,7 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
     statusLine += hasMoved ? ' Manoeuvre complete – end your turn.' : ' Now manoeuvre one ship, or hold position.';
   }
 
-  const turnNumber = Math.floor(state.turn / 2) + 1;
+  const turnNumber = Math.floor(view.turn / 2) + 1;
 
   return (
     <Screen>
@@ -150,8 +149,8 @@ export function GameScreen({ state, viewer, busy, onFire, onManeuver, onEndTurn,
           <Text style={styles.turn}>Turn {turnNumber}</Text>
         </View>
         <Text style={styles.fleetCount}>
-          Your ships: {shipsRemaining(me.ships)}/{me.ships.length} · Enemy ships: {shipsRemaining(enemy.ships)}/
-          {enemy.ships.length}
+          Your ships: {shipsRemaining(me.ships)}/{me.ships.length} · Enemy ships: {afloatCount(enemy.fleet)}/
+          {enemy.fleet.length}
         </Text>
       </View>
 

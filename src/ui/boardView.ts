@@ -2,7 +2,9 @@ import {
   BOARD_SIZE,
   Coord,
   Heading,
-  PlayerState,
+  PlayerView,
+  PublicShip,
+  ShotRecord,
   Ship,
   ShipClassId,
   ShotOutcome,
@@ -69,8 +71,8 @@ export function paintPreview(grid: Grid, cells: readonly Coord[], ok: boolean): 
 }
 
 /** Latest shot per cell, with its age in half-turns. */
-function paintShots(grid: Grid, shots: PlayerState['shots'], now: number, skipHitsOnShips: boolean): void {
-  const latest = new Map<string, PlayerState['shots'][number]>();
+function paintShots(grid: Grid, shots: readonly ShotRecord[], now: number, skipHitsOnShips: boolean): void {
+  const latest = new Map<string, ShotRecord>();
   for (const s of shots) latest.set(coordKey(s), s);
   for (const s of latest.values()) {
     const cell = grid[s.r][s.c];
@@ -81,26 +83,39 @@ function paintShots(grid: Grid, shots: PlayerState['shots'], now: number, skipHi
 
 /** The owner's view of their own waters: ships, damage, and where the enemy has fired. */
 export function buildFleetView(
-  me: PlayerState,
-  enemy: PlayerState,
-  now: number,
+  view: PlayerView,
   opts: { selectedShipId?: string; preview?: { cells: Coord[]; ok: boolean } } = {},
 ): Grid {
   const grid = emptyGrid();
-  paintShips(grid, me.ships, opts.selectedShipId);
-  paintShots(grid, enemy.shots, now, true);
+  paintShips(grid, view.me.ships, opts.selectedShipId);
+  paintShots(grid, view.enemy.shots, view.turn, true);
   if (opts.preview) paintPreview(grid, opts.preview.cells, opts.preview.ok);
   return grid;
 }
 
-/** The attacker's view of enemy waters: shot history plus revealed sunk ships. */
-export function buildTrackingView(me: PlayerState, enemy: PlayerState, now: number, target?: Coord): Grid {
+/** A sunk opponent ship, as a drawable hull. Every section of a wreck is hit. */
+function wreck(ship: Extract<PublicShip, { sunk: true }>): Ship {
+  return {
+    id: ship.classId,
+    classId: ship.classId,
+    bow: { ...ship.bow },
+    heading: ship.heading,
+    length: ship.length,
+    hits: new Array<boolean>(ship.length).fill(true),
+    cooldown: 0,
+  };
+}
+
+/**
+ * The attacker's view of enemy waters: shot history plus revealed wrecks.
+ * Built from a PlayerView, which carries no position for an enemy ship still
+ * afloat, so this board cannot draw one even by mistake.
+ */
+export function buildTrackingView(view: PlayerView, target?: Coord): Grid {
   const grid = emptyGrid();
-  paintShips(
-    grid,
-    enemy.ships.filter((s) => isSunk(s)),
-  );
-  paintShots(grid, me.shots, now, false);
+  const wrecks = view.enemy.fleet.flatMap((s) => (s.sunk ? [wreck(s)] : []));
+  paintShips(grid, wrecks);
+  paintShots(grid, view.me.shots, view.turn, false);
   if (target) grid[target.r][target.c].target = true;
   return grid;
 }

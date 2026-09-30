@@ -6,3 +6,4 @@ export * from './ships';
 export * from './maneuver';
 export * from './game';
 export * from './ai';
+export * from './view';

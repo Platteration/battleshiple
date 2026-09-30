@@ -2,6 +2,7 @@ import { buildFleetView, buildTrackingView } from '../src/ui/boardView';
 import { createGame, endTurn, fire, visibleLog, maneuver } from '../src/engine/game';
 import { makeShip, cellsOf } from '../src/engine/ships';
 import { GameState, Ship } from '../src/engine/types';
+import { toPlayerView } from '../src/engine/view';
 
 function fleet(): Ship[] {
   return [
@@ -35,7 +36,7 @@ describe('hidden information', () => {
       g = endTurn(fire(g, t).state);
       g = endTurn(fire(g, { r: 9, c: 9 }).state);
     }
-    const grid = buildTrackingView(g.players[0], g.players[1], g.turn);
+    const grid = buildTrackingView(toPlayerView(g, 0));
     const revealed = grid.flat().filter((c) => c.ship);
     // Only cells of ships that are actually sunk may be painted.
     const sunkCells = g.players[1].ships.filter((s) => s.hits.every(Boolean)).flatMap(cellsOf);
@@ -48,12 +49,12 @@ describe('hidden information', () => {
 
   test('a fresh tracking board reveals nothing at all', () => {
     const g = game();
-    expect(shipCellCount(buildTrackingView(g.players[0], g.players[1], g.turn))).toBe(0);
+    expect(shipCellCount(buildTrackingView(toPlayerView(g, 0)))).toBe(0);
   });
 
   test('the fleet view shows the owner every one of their own hulls', () => {
     const g = game();
-    const grid = buildFleetView(g.players[0], g.players[1], g.turn);
+    const grid = buildFleetView(toPlayerView(g, 0));
     expect(shipCellCount(grid)).toBe(fleet().reduce((n, s) => n + s.length, 0));
   });
 

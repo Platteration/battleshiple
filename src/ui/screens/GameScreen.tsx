@@ -183,7 +183,7 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
       </View>
 
       {tab === 'enemy' ? (
-        <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes.map((s) => s.quadrant)} disabled={!myTurn || phase !== 'fire'} />
+        <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes} disabled={!myTurn || phase !== 'fire'} />
       ) : (
         <Board grid={fleetGrid} hulls={myHulls} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
       )}

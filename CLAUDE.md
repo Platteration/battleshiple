@@ -78,8 +78,9 @@ Reduce motion resolves through `useReduceMotion` in `src/motion.ts`: `on`/`off` 
 player's word, `system` asks `AccessibilityInfo` and follows `reduceMotionChanged`, a native
 call that rejects (no module behind it) means false, and on the web a page without
 `matchMedia` means false too, because react-native-web resolves *true* there. The only
-decorative motion is `SplashOverlay`, which holds its ripples still rather than dropping
-them: the splash is information. Anything that spends what the app cannot restore is
+motion is `SplashOverlay`'s one ripple when a splash report first arrives (never looped,
+never replayed for the same `quadrant:turn`); the report itself is a hatched, outlined
+quadrant that reduce motion keeps whole, because the splash is information. Anything that spends what the app cannot restore is
 confirmed through `confirmAction` in `src/confirm.ts` — `window.confirm` on the web,
 `Alert.alert` elsewhere — because react-native-web's `Alert.alert` is an empty static, and
 the "Start a new battle?" prompt was a silent no-op there: with a saved battle the start
@@ -94,8 +95,8 @@ URL but `SOURCE_URL`, and pins `Linking.openURL(SOURCE_URL)` — handed to the b
 `.catch`, since Android rejects when nothing answers the intent — as the only `openURL` in the
 tree. On the board, the locked target cell is exposed as `selected`, so a screen reader is
 told which cell FIRE will act on; the game tabs are a `tablist`, and the shared `Segmented`
-is a named `radiogroup`. `__tests__/splash.test.tsx` pins that reduce motion holds the
-ripples rather than hiding them.
+is a named `radiogroup`. `__tests__/splash.test.tsx` pins that reduce motion drops only the ripple, never
+the reported quadrant.
 
 ## Conventions
 

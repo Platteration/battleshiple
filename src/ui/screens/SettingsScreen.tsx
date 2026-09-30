@@ -71,7 +71,7 @@ export function SettingsScreen({ onBack }: Props) {
 
       <View style={styles.card}>
         <Segmented label="Reduce motion" options={MOTION} value={settings.reduceMotion} onChange={(v) => update({ reduceMotion: v })} />
-        <Text style={styles.hint}>Holds the splash ripples still. System follows the device's accessibility setting.</Text>
+        <Text style={styles.hint}>Skips the splash ripple; the reported quadrant stays marked. System follows the device's accessibility setting.</Text>
       </View>
 
       <Button title="Reset to defaults" variant="ghost" onPress={onReset} />

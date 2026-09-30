@@ -11,7 +11,7 @@ export type { ThemeSetting };
 export interface AppSettings {
   /** Haptic feedback on shots, hits and manoeuvres. */
   haptics: boolean;
-  /** Hold the splash ripples still. `system` follows the device's accessibility setting. */
+  /** Skip the splash ripple. `system` follows the device's accessibility setting. */
   reduceMotion: ReduceMotionSetting;
   /** The computer's skill, chosen on the menu and kept across launches. */
   difficulty: Difficulty;

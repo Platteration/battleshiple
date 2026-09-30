@@ -38,9 +38,10 @@ cooldown, so wounded ships are slow to escape.
 ### Splashes
 
 Both boards are divided into the four quadrants, labelled NW, NE, SW and SE.
-When a ship moves, its opponent sees animated ripples in the quadrant
-(NW / NE / SW / SE) containing the ship's new midpoint, for the duration of
-their next turn. The mover's own log records the full manoeuvre; the opponent
+When a ship moves, its opponent sees the quadrant containing the ship's new
+midpoint outlined and hatched, for the duration of their next turn: something
+moved somewhere in there. A ripple plays once as the report arrives (not with
+Reduce motion on). The mover's own log records the full manoeuvre; the opponent
 only ever sees the splash.
 
 ### Shot markers
@@ -69,7 +70,7 @@ against easy and normal, and a genuine trade-off against hard.
 ## Settings
 
 From the menu: **Theme** (system, light or dark), **Vibration** on or off, **Reduce
-motion** (system, on or off — holds the splash ripples still without hiding them),
+motion** (system, on or off — drops the splash ripple; the reported quadrant stays marked),
 **Reset to defaults**, and an About card with the version and licence. The computer skill you pick on the menu is kept
 between launches. Nothing leaves your device: the app has no network code.
 

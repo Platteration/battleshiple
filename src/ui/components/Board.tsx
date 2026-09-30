@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Coord, Quadrant } from '../../engine';
+import { Coord, Quadrant, Splash } from '../../engine';
 import { CellView, Grid, HullView } from '../boardView';
 import { makeStyles, useTheme } from '../theme';
 import { Hull } from './Hull';
@@ -13,7 +13,8 @@ interface Props {
   onPressCell?: (coord: Coord) => void;
   /** Whole hulls, drawn as silhouettes beneath the cells. Damage marks stay in the cells. */
   hulls?: readonly HullView[];
-  splashes?: Quadrant[];
+  /** Reported enemy movement, drawn as intel beneath the hulls and marks. */
+  splashes?: readonly Splash[];
   disabled?: boolean;
 }
 
@@ -161,7 +162,7 @@ export function Board({ grid, width, onPressCell, hulls = [], splashes = [], dis
             ))}
           </View>
           <View testID="board-intel" pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <SplashOverlay size={playSize} quadrants={splashes} />
+            <SplashOverlay size={playSize} splashes={splashes} />
           </View>
           <View testID="board-hulls" pointerEvents="none" style={StyleSheet.absoluteFill}>
             {hulls.map((h) => (

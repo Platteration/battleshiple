@@ -17,7 +17,7 @@ import {
   shipAt,
   shipCells,
 } from '../../engine';
-import { emptyGrid, paintPreview, paintShips } from '../boardView';
+import { emptyGrid, hullsOf, paintPreview, paintShips } from '../boardView';
 import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
@@ -55,6 +55,7 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
     if (badPreview) paintPreview(g, badPreview, false);
     return g;
   }, [ships, selectedShip, badPreview]);
+  const hulls = useMemo(() => hullsOf(ships, selectedShip?.id), [ships, selectedShip]);
 
   function place(classId: ShipClassId, bow: Coord, h: Heading): boolean {
     const others = ships.filter((s) => s.classId !== classId);
@@ -119,7 +120,7 @@ export function SetupScreen({ playerName, onReady, onBack }: Props) {
         <Text style={styles.message}>{message}</Text>
       </View>
 
-      <Board grid={grid} width={width} onPressCell={onPressCell} />
+      <Board grid={grid} hulls={hulls} width={width} onPressCell={onPressCell} />
 
       <View style={styles.tray}>
         {FLEET.map((id) => {

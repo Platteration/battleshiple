@@ -132,3 +132,61 @@ export function buildTrackingView(view: PlayerView, target?: Coord): Grid {
   if (target) cellOn(grid, target).target = true;
   return grid;
 }
+
+/**
+ * A whole hull, for drawing one continuous silhouette rather than a tile per
+ * cell. `r`/`c` is the top-left cell of its footprint; `bowAt` says which end
+ * of that footprint is the bow ('start' is the top or left end).
+ */
+export interface HullView {
+  id: string;
+  classId: ShipClassId;
+  r: number;
+  c: number;
+  length: number;
+  horizontal: boolean;
+  bowAt: 'start' | 'end';
+  heading: Heading;
+  sunk: boolean;
+  selected: boolean;
+  ready: boolean;
+}
+
+export function hullOf(ship: Ship, selectedId?: string): HullView {
+  const cells = cellsOf(ship);
+  const r = Math.min(...cells.map((x) => x.r));
+  const c = Math.min(...cells.map((x) => x.c));
+  const horizontal = cells.every((x) => x.r === ship.bow.r);
+  const bowAt = (horizontal ? ship.bow.c === c : ship.bow.r === r) ? 'start' : 'end';
+  return {
+    id: ship.id,
+    classId: ship.classId,
+    r,
+    c,
+    length: ship.length,
+    horizontal,
+    bowAt,
+    heading: ship.heading,
+    sunk: isSunk(ship),
+    selected: ship.id === selectedId,
+    ready: isReady(ship),
+  };
+}
+
+export function hullsOf(ships: readonly Ship[], selectedId?: string): HullView[] {
+  return ships.map((s) => hullOf(s, selectedId));
+}
+
+/** The viewer's own fleet, every hull of it. */
+export function fleetHulls(view: PlayerView, selectedShipId?: string): HullView[] {
+  return hullsOf(view.me.ships, selectedShipId);
+}
+
+/**
+ * The enemy hulls the viewer may see: wrecks, and nothing else. Built from the
+ * PlayerView's public fleet, which carries no position for a ship afloat.
+ */
+export function trackingHulls(view: PlayerView): HullView[] {
+  return hullsOf(view.enemy.fleet.flatMap((s) => (s.sunk ? [wreck(s)] : [])));
+}
+

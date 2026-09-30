@@ -15,7 +15,7 @@ import {
   shipAt,
   shipsRemaining,
 } from '../../engine';
-import { buildFleetView, buildTrackingView } from '../boardView';
+import { buildFleetView, buildTrackingView, fleetHulls, trackingHulls } from '../boardView';
 import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { FleetStatus } from '../components/FleetStatus';
@@ -96,6 +96,8 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
   }, [selectedShip, pending, me.ships]);
 
   const trackingGrid = useMemo(() => buildTrackingView(view, target), [view, target]);
+  const wrecks = useMemo(() => trackingHulls(view), [view]);
+  const myHulls = useMemo(() => fleetHulls(view, selectedShipId), [view, selectedShipId]);
   const fleetGrid = useMemo(
     () => buildFleetView(view, { selectedShipId, preview }),
     [view, selectedShipId, preview],
@@ -181,9 +183,9 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
       </View>
 
       {tab === 'enemy' ? (
-        <Board grid={trackingGrid} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes.map((s) => s.quadrant)} disabled={!myTurn || phase !== 'fire'} />
+        <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes.map((s) => s.quadrant)} disabled={!myTurn || phase !== 'fire'} />
       ) : (
-        <Board grid={fleetGrid} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
+        <Board grid={fleetGrid} hulls={myHulls} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
       )}
 
       <Text style={styles.status}>{statusLine}</Text>

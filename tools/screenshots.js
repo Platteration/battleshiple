@@ -110,8 +110,8 @@ async function overflow(page) {
  * harness see. Shapes match src/engine/types.ts and pass src/storage.ts isValid.
  */
 function nearlyWonSave() {
-  const ship = (classId, r, c, length, hits) => ({
-    id: classId, classId, bow: { r, c }, heading: 'E', length, hits, cooldown: 0,
+  const ship = (classId, r, c, length, hits, cooldown = 0) => ({
+    id: classId, classId, bow: { r, c }, heading: 'E', length, hits, cooldown,
   });
   const fleet = (sunk) => [
     ship('carrier', 0, 4, 5, Array(5).fill(sunk)),
@@ -121,6 +121,15 @@ function nearlyWonSave() {
     // bow (8,1) = B9 still afloat; stern (8,0) already hit
     ship('patrol', 8, 1, 2, sunk ? [false, true] : [false, false]),
   ];
+  // The human's fleet carries the states the matrix would otherwise never show:
+  // a damaged hull (the battleship, hit twice) and one on cooldown (the destroyer).
+  const own = () => [
+    ship('carrier', 0, 4, 5, Array(5).fill(false)),
+    ship('battleship', 2, 3, 4, [false, true, true, false]),
+    ship('destroyer', 4, 2, 3, Array(3).fill(false), 2),
+    ship('submarine', 6, 2, 3, Array(3).fill(false)),
+    ship('patrol', 8, 1, 2, [false, false]),
+  ];
   const player = (index, name, isAI, ships) => ({ index, name, isAI, ships, shots: [], splashes: [] });
   return JSON.stringify({
     version: 1,
@@ -128,7 +137,7 @@ function nearlyWonSave() {
     difficulty: 'normal',
     state: {
       mode: 'ai',
-      players: [player(0, 'You', false, fleet(false)), player(1, 'Admiral Byte', true, fleet(true))],
+      players: [player(0, 'You', false, own()), player(1, 'Admiral Byte', true, fleet(true))],
       current: 0,
       phase: 'fire',
       turn: 40,
@@ -242,6 +251,11 @@ async function run(browser, cfg, errors) {
   await endPage.waitForTimeout(600);
   try {
     await tap(endPage, 'Resume game');
+    await endPage.waitForTimeout(300);
+    await endPage.screenshot({ path: path.join(dir, '09-wrecks.png') });
+    await tap(endPage, 'Your fleet');
+    await endPage.screenshot({ path: path.join(dir, '10-fleet-damage.png') });
+    await tap(endPage, 'Enemy waters');
     await cell(endPage, 'B9');
     await tap(endPage, 'FIRE at B9');
     await endPage.waitForTimeout(1200); // the win holds on the board briefly

@@ -1,8 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Coord, Quadrant, headingArrow } from '../../engine';
-import { CellView, Grid } from '../boardView';
+import { Coord, Quadrant } from '../../engine';
+import { CellView, Grid, HullView } from '../boardView';
 import { makeStyles, useTheme } from '../theme';
+import { Hull } from './Hull';
 import { SplashOverlay } from './SplashOverlay';
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   /** Total pixel width available for the board including labels. */
   width: number;
   onPressCell?: (coord: Coord) => void;
+  /** Whole hulls, drawn as silhouettes beneath the cells. Damage marks stay in the cells. */
+  hulls?: readonly HullView[];
   splashes?: Quadrant[];
   disabled?: boolean;
 }
@@ -38,62 +41,21 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
   const fontSize = Math.max(10, size * 0.55);
   const nodes: React.ReactNode[] = [];
 
-  if (cell.ship) {
-    const s = cell.ship;
+  if (cell.ship?.hit) {
+    // A halo under the mark: the hit colour alone is 1.05-2.3:1 on the hull
+    // fills. A drawn disc rather than a text shadow, which some platforms drop.
     nodes.push(
-      // The crisp outline plate. When selected it takes the selection colour, so
-      // the ring reads as a frame against the water (>=3:1 in both palettes);
-      // on the hull alone it was ~1.1:1 against the patrol boat's orange.
       <View
-        key="outline"
-        style={[StyleSheet.absoluteFill, { backgroundColor: s.selected ? p.selected : p.token.stroke, borderRadius: 5 }]}
-      />,
-      <View
-        key="ship"
+        key="hitHalo"
         style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: s.sunk ? p.token.sunk : p.token.fill[s.classId],
-            opacity: s.sunk ? 0.9 : s.ready ? 1 : 0.6,
-            margin: 1,
-            borderRadius: 4,
-            // Shallow tabletop depth (VISUAL_STYLE.md): a small upper-left
-            // highlight and one short lower edge. The crisp outline is the
-            // plate drawn behind this view.
-            borderWidth: 1,
-            borderTopColor: p.depth.highlight,
-            borderLeftColor: p.depth.highlightSoft,
-            borderRightColor: p.depth.shade,
-            borderBottomColor: p.depth.edge,
-            borderBottomWidth: 3,
-          },
-          s.selected && styles.selectedShip,
+          styles.hitHalo,
+          { width: size * 0.62, height: size * 0.62, borderRadius: size * 0.31, backgroundColor: p.pencil.hitHalo },
         ]}
       />,
+      <Text key="hit" style={[styles.hitMark, { fontSize }]}>
+        ✕
+      </Text>,
     );
-    if (s.isBow && !s.sunk) {
-      nodes.push(
-        <Text key="bow" style={[styles.bow, { color: p.token.mark[s.classId], fontSize: fontSize * 0.8 }]}>
-          {headingArrow(s.heading)}
-        </Text>,
-      );
-    }
-    if (s.hit) {
-      // A halo under the mark: the hit colour alone is 1.05-2.3:1 on the hull
-      // fills. A drawn disc rather than a text shadow, which some platforms drop.
-      nodes.push(
-        <View
-          key="hitHalo"
-          style={[
-            styles.hitHalo,
-            { width: size * 0.62, height: size * 0.62, borderRadius: size * 0.31, backgroundColor: p.pencil.hitHalo },
-          ]}
-        />,
-        <Text key="hit" style={[styles.hitMark, { fontSize }]}>
-          ✕
-        </Text>,
-      );
-    }
   }
 
   if (cell.shot && !cell.ship) {
@@ -147,7 +109,7 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
   return <>{nodes}</>;
 }
 
-export function Board({ grid, width, onPressCell, splashes = [], disabled }: Props) {
+export function Board({ grid, width, onPressCell, hulls = [], splashes = [], disabled }: Props) {
   const styles = useStyles();
   const size = grid.length;
   const cell = Math.floor(width / (size + 1));
@@ -201,6 +163,11 @@ export function Board({ grid, width, onPressCell, splashes = [], disabled }: Pro
           <View testID="board-intel" pointerEvents="none" style={StyleSheet.absoluteFill}>
             <SplashOverlay size={playSize} quadrants={splashes} />
           </View>
+          <View testID="board-hulls" pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {hulls.map((h) => (
+              <Hull key={h.id} hull={h} cell={cell} />
+            ))}
+          </View>
           {grid.map((row, r) => (
             <View key={r} style={styles.row}>
               {row.map((cv, c) => (
@@ -239,18 +206,7 @@ const useStyles = makeStyles(({ palette: p, type: ty }) => ({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  // Per-side colours resolve ahead of `borderColor`, so the ring must name
-  // every side or the hull's bevel (set per side above) wins and no ring shows.
-  selectedShip: {
-    borderWidth: 2,
-    borderBottomWidth: 2,
-    borderTopColor: p.selected,
-    borderLeftColor: p.selected,
-    borderRightColor: p.selected,
-    borderBottomColor: p.selected,
-  },
   preview: { borderWidth: 2, borderStyle: 'dashed' },
-  bow: { fontWeight: '900' },
   hitMark: { color: p.pencil.hit, fontWeight: '900', position: 'absolute' },
   hitHalo: { position: 'absolute' },
   missDot: { backgroundColor: p.pencil.miss },

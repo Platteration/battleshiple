@@ -2,7 +2,7 @@ import React from 'react';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { StyleSheet } from 'react-native';
 import { makeShip } from '../src/engine/ships';
-import { emptyGrid, paintShips } from '../src/ui/boardView';
+import { emptyGrid, hullsOf, paintShips } from '../src/ui/boardView';
 import { Board } from '../src/ui/components/Board';
 import { dark, light, Palette, ThemeProvider } from '../src/ui/theme';
 
@@ -13,13 +13,17 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 const SIDES = ['borderTopColor', 'borderLeftColor', 'borderRightColor', 'borderBottomColor'] as const;
 
-/** The hull view drawn inside the cell with the given label ("A1"). */
-function hullStyle(root: ReactTestInstance, label: string, palette: Palette) {
-  const cell = root.find((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
-  const hull = cell.find(
-    (n) => String(n.type) === 'View' && StyleSheet.flatten(n.props.style)?.backgroundColor === palette.token.fill.patrol,
-  );
-  return StyleSheet.flatten(hull.props.style);
+/**
+ * The patrol boat's hull, in the fill colour. Hulls used to be drawn a tile per
+ * cell and were found inside the cell labelled B9; they are now one silhouette
+ * in the layer beneath the cells, found by its test id and checked for the
+ * same fill before any style is read.
+ */
+function hullStyle(root: ReactTestInstance, palette: Palette) {
+  const hull = root.find((n) => n.props.testID === 'hull-patrol' && String(n.type) === 'View');
+  const style = StyleSheet.flatten(hull.props.style);
+  expect(style.backgroundColor).toBe(palette.token.fill.patrol);
+  return style;
 }
 
 /**
@@ -50,7 +54,7 @@ describe.each([
     act(() => {
       renderer = create(
         <ThemeProvider theme={appearance}>
-          <Board grid={grid} width={330} />
+          <Board grid={grid} hulls={hullsOf([ship], selected ? ship.id : undefined)} width={330} />
         </ThemeProvider>,
       );
     });
@@ -58,7 +62,7 @@ describe.each([
 
   test('a selected ship is ringed in the selection colour on every side', () => {
     render(true);
-    const style = hullStyle(renderer.root, 'B9', palette);
+    const style = hullStyle(renderer.root, palette);
     for (const side of SIDES) expect(style[side]).toBe(palette.selected);
     expect(style.borderWidth).toBe(2);
     expect(style.borderBottomWidth).toBe(2);
@@ -66,7 +70,7 @@ describe.each([
 
   test('an unselected ship keeps its bevel and no side is the selection colour', () => {
     render(false);
-    const style = hullStyle(renderer.root, 'B9', palette);
+    const style = hullStyle(renderer.root, palette);
     for (const side of SIDES) expect(style[side]).not.toBe(palette.selected);
     expect(style.borderTopColor).toBe(palette.depth.highlight);
     expect(style.borderBottomColor).toBe(palette.depth.edge);
@@ -93,26 +97,25 @@ describe.each([
     act(() => {
       renderer = create(
         <ThemeProvider theme={appearance}>
-          <Board grid={grid} width={330} />
+          <Board grid={grid} hulls={hullsOf([ship], selected ? ship.id : undefined)} width={330} />
         </ThemeProvider>,
       );
     });
-    const cell = renderer.root.find(
-      (n) => n.props.accessibilityLabel === 'B9' && typeof n.props.onPress === 'function',
-    );
-    const colours = cell
-      .findAll((n) => String(n.type) === 'View')
-      .map((n) => StyleSheet.flatten(n.props.style)?.backgroundColor);
-    return colours;
+    // The plate itself. The cell used to hold only the plate and the hull, so
+    // "some view in it is the stroke colour" meant the plate; the footprint now
+    // also holds deck details, and the patrol boat's is deep ink in light, the
+    // same value as the stroke, so the plate is read directly.
+    const plate = renderer.root.find((n) => n.props.testID === 'hull-plate-patrol' && String(n.type) === 'View');
+    return StyleSheet.flatten(plate.props.style).backgroundColor;
   }
 
   test('an unselected hull sits on the crisp outline colour', () => {
-    expect(plateColour(false)).toContain(palette.token.stroke);
+    expect(plateColour(false)).toBe(palette.token.stroke);
   });
 
   test('a selected hull sits on a plate in the selection colour, framing it against the water', () => {
-    const colours = plateColour(true);
-    expect(colours).toContain(palette.selected);
-    expect(colours).not.toContain(palette.token.stroke);
+    const colour = plateColour(true);
+    expect(colour).toBe(palette.selected);
+    expect(colour).not.toBe(palette.token.stroke);
   });
 });

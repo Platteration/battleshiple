@@ -146,7 +146,10 @@ Battleshiple follows the shared illustrated-tabletop language in
 [VISUAL_STYLE.md](VISUAL_STYLE.md): warm ivory or deep ink behind opaque
 panels, muted sea-glass and amber accents, the platform sans-serif, and shallow
 depth — a crisp outline, a short lower edge and a small upper-left highlight on
-each hull. The Theme setting picks Light, Dark, or System, which follows the
+each hull. Every ship is one continuous silhouette with a rounded bow, and its
+deck tells the class apart without relying on colour: the carrier's island, the
+battleship's three turrets, the destroyer's two, the submarine's sail and the
+patrol boat's cabin. The Theme setting picks Light, Dark, or System, which follows the
 device (and is dark on one that reports no preference).
 
 Colours live in semantic roles in `src/ui/theme/`, never in components; a test

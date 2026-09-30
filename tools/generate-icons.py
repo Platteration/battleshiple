@@ -15,12 +15,15 @@ from pngkit import (  # noqa: E402
 
 
 # ---------- palette ----------
-BG        = hexrgb('#061a2b')
-BG_DEEP   = hexrgb('#03101c')
-GRID      = hexrgb('#164466')
-RIPPLE    = hexrgb('#9be0ff')
-SHIP      = hexrgb('#ffd166')
-SHIP_DARK = hexrgb('#c99a3f')
+# The shared illustrated-tabletop palette (VISUAL_STYLE.md / src/ui/theme):
+# deep ink ground, a muted sea-glass grid, the in-game splash colour for the
+# rings, and the amber accent for the hull.
+BG        = hexrgb('#19232d')   # deep ink: surface.base (dark)
+BG_DEEP   = hexrgb('#111920')   # vignette corners
+GRID      = hexrgb('#526674')   # surface.border (dark)
+RIPPLE    = hexrgb('#9be0ff')   # intel.stroke (dark): the splash
+SHIP      = hexrgb('#e8bd70')   # accent.fill: amber
+SHIP_DARK = hexrgb('#b58a3e')   # darker amber for deck details
 WHITE     = (255, 255, 255)
 
 # local +y is forward and screen y points down, so the bow direction is

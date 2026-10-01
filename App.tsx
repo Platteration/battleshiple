@@ -12,6 +12,7 @@ import {
   Ship,
   aiChooseManeuver,
   aiChooseShot,
+  afterActionReport,
   createGame,
   defaultRng,
   endTurn,
@@ -453,7 +454,7 @@ function Game() {
       break;
     case 'over':
       content = game ? (
-        <GameOverScreen state={game} onRematch={() => startSetup(game.mode)} onHome={goHome} />
+        <GameOverScreen report={afterActionReport(game)} onRematch={() => startSetup(game.mode)} onHome={goHome} />
       ) : (
         home
       );

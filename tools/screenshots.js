@@ -154,7 +154,7 @@ function nearlyWonSave() {
     difficulty: 'normal',
     state: {
       mode: 'ai',
-      players: [player(0, 'You', false, own()), player(1, 'Admiral Byte', true, fleet(true))],
+      players: [player(0, 'You', false, own()), player(1, 'Capt. Varga', true, fleet(true))],
       current: 0,
       phase: 'fire',
       turn: 40,
@@ -177,6 +177,14 @@ function worstTurnSave() {
   st.lastShot = { by: 0, coord: { r: 9, c: 9 }, result: 'miss', alreadyDamaged: false, gameOver: false };
   st.players[0].lastIncoming = { r: 2, c: 4, result: 'hit', turn: st.turn - 1, classId: 'battleship', sunk: false };
   st.players[0].splashes = [{ quadrant: 'NW', turn: st.turn - 1 }];
+  // A log as play writes it, including the computer's manoeuvre, which the
+  // signal log must leave out (12-signal-log shows three lines, not four).
+  st.log = [
+    { turn: st.turn - 2, by: 0, kind: 'shot', text: 'You fired at C4: miss.' },
+    { turn: st.turn - 1, by: 1, kind: 'shot', text: 'Capt. Varga fired at E3: hit!' },
+    { turn: st.turn - 1, by: 1, kind: 'move', text: 'Capt. Varga moved the Destroyer ahead 2 (splash in the north-west).' },
+    { turn: st.turn, by: 0, kind: 'shot', text: 'You fired at J10: miss.' },
+  ];
   return JSON.stringify(save);
 }
 
@@ -316,6 +324,10 @@ async function run(browser, cfg, errors) {
     await pickManeuver(worstPage);
     await worstPage.screenshot({ path: path.join(dir, '11-worst-turn.png') });
     worstOverflow = await overflow(worstPage);
+    // The signal log sheet, over the same turn.
+    await tap(worstPage, 'Log');
+    await worstPage.waitForTimeout(400);
+    await worstPage.screenshot({ path: path.join(dir, '12-signal-log.png') });
   } catch (e) {
     errors.push(`[${label}] could not reach the worst turn: ${e.message}`);
   }

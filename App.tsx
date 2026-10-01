@@ -26,6 +26,7 @@ import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './src/ui/theme';
 import { feedback } from './src/ui/feedback';
+import { OPPONENTS } from './src/ui/opponents';
 import { GameOverScreen } from './src/ui/screens/GameOverScreen';
 import { GameScreen } from './src/ui/screens/GameScreen';
 import { HandoffScreen } from './src/ui/screens/HandoffScreen';
@@ -47,13 +48,17 @@ type Screen =
   | { name: 'over' }
   | { name: 'settings' };
 
-const AI_NAME = 'Admiral Byte';
 const AI_DELAY_MS = 900;
 /** Beat between the winning shot landing and the summary screen. */
 const OVER_REVEAL_MS = 700;
 
-function playerNames(mode: GameMode): [string, string] {
-  return mode === 'ai' ? ['You', AI_NAME] : ['Player 1', 'Player 2'];
+/**
+ * The names a new match is started with. The computer is the commander for the
+ * chosen skill (src/ui/opponents.ts). A save keeps the names it was started
+ * with, so a battle begun against "Admiral Byte" is still fought against him.
+ */
+function playerNames(mode: GameMode, difficulty: Difficulty): [string, string] {
+  return mode === 'ai' ? ['You', OPPONENTS[difficulty].name] : ['Player 1', 'Player 2'];
 }
 
 function describeSave(state: GameState, savedAt: number): string {
@@ -171,7 +176,7 @@ function Game() {
   // vs-Computer the human is always player 0; in pass-and-play, whoever's turn.
   const view = useMemo(() => (game ? toPlayerView(game, game.mode === 'ai' ? 0 : game.current) : null), [game]);
 
-  const names = playerNames(mode);
+  const names = playerNames(mode, difficulty);
 
   const startSetup = useCallback(
     (m: GameMode) => {
@@ -205,13 +210,13 @@ function Game() {
   );
 
   const beginGame = useCallback((f0: Ship[], f1: Ship[], m: GameMode) => {
-    const g = createGame({ mode: m, names: playerNames(m), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
+    const g = createGame({ mode: m, names: playerNames(m, difficulty), fleets: [f0, f1], aiPlayer: m === 'ai' ? 1 : undefined });
     setSaved(null);
     setGame(g);
     // A local board is never shown without a handoff in front of it: the admiral
     // who just deployed is still holding the device.
     setScreen(m === 'local' ? { name: 'handoff', player: g.current, reason: 'turn' } : { name: 'game' });
-  }, []);
+  }, [difficulty]);
 
   const onSetupReady = useCallback(
     (ships: Ship[]) => {

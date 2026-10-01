@@ -58,11 +58,13 @@ two turns turns grey, so a stale hit is a hint rather than a certainty.
 
 ### Computer skill
 
-| Level  | Behaviour |
-|--------|-----------|
-| Easy   | Fires loosely, often at random, and rarely repositions. |
-| Normal | Parity hunt plus a target chase after each hit. Cannot read splashes. |
-| Hard   | Reads your splashes and hunts the quadrant you moved into. Moves threatened ships, not just damaged ones. |
+Each level is a fictional commander, named on the menu and in the battle.
+
+| Level  | Commander   | Behaviour |
+|--------|-------------|-----------|
+| Easy   | Cdr. Hollis | Fires loosely, often at random, and rarely repositions. |
+| Normal | Capt. Varga | Parity hunt plus a target chase after each hit. Cannot read splashes. |
+| Hard   | The Heron   | Reads your splashes and hunts the quadrant you moved into. Moves threatened ships, not just damaged ones. |
 
 Only the hard opponent uses splash intelligence, so manoeuvring is nearly free
 against easy and normal, and a genuine trade-off against hard.

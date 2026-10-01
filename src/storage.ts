@@ -93,7 +93,7 @@ const MAX_LOG = MAX_HALF_TURNS * 4;
 const MAX_SPLASHES = 2 * SPLASH_VISIBLE_TURNS * 2;
 /** The engine's longest line – a manoeuvre report – runs to about eighty. */
 const MAX_LOG_TEXT = 200;
-/** Names come from `playerNames`: the longest is 'Admiral Byte'. */
+/** Names come from `playerNames` and `src/ui/opponents.ts`: the longest is 'Capt. Varga' (11), and older saves carry 'Admiral Byte' (12). */
 const MAX_NAME = 40;
 
 /**
@@ -195,8 +195,9 @@ function isLogEntry(v: unknown): boolean {
     isCount(v.turn) &&
     isPlayerIndex(v.by) &&
     (v.kind === 'shot' || v.kind === 'move' || v.kind === 'system') &&
-    // The last four of these are drawn; the engine writes about eighty
-    // characters, and nothing in the app writes a megabyte into a <Text>.
+    // The newest is drawn in the report strip and every one in the signal log;
+    // the engine writes about eighty characters, and nothing in the app writes a
+    // megabyte into a <Text>.
     isText(v.text, MAX_LOG_TEXT)
   );
 }

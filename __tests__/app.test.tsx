@@ -140,8 +140,30 @@ describe('App', () => {
       jest.advanceTimersByTime(1500);
     });
     // Back to the human with a report of what the AI did.
-    expect(hasText(root, 'Admiral Byte fired at')).toBe(true);
+    expect(hasText(root, 'Capt. Varga fired at')).toBe(true);
     expect(hasText(root, 'Choose a target')).toBe(true);
+  });
+
+  test.each([
+    ['Easy', 'Cdr. Hollis'],
+    ['Normal', 'Capt. Varga'],
+    ['Hard', 'The Heron'],
+  ])('at %s the computer is %s, on the menu and in the battle', (skill, name) => {
+    const root = renderer.root;
+    pressText(root, skill);
+    expect(hasText(root, `${name}.`)).toBe(true);
+    pressText(root, 'Play vs Computer');
+    pressText(root, 'Random');
+    pressText(root, 'Start battle');
+    pressCell(root, 'E5');
+    pressText(root, 'FIRE at E5');
+    pressText(root, 'Hold position');
+    expect(hasText(root, `${name} is taking their turn`)).toBe(true);
+    act(() => {
+      jest.advanceTimersByTime(1500);
+    });
+    expect(hasText(root, `${name} fired at`)).toBe(true);
+    expect(hasText(root, 'Admiral Byte')).toBe(false);
   });
 
   test('pass and play: both players deploy, handoff screens appear between turns', () => {
@@ -377,7 +399,7 @@ describe('App', () => {
       jest.advanceTimersByTime(1500);
     });
     // The computer takes the turn it owed instead of leaving a dead board.
-    expect(hasText(root, 'Admiral Byte fired at')).toBe(true);
+    expect(hasText(root, 'Capt. Varga fired at')).toBe(true);
     expect(hasText(root, 'is taking their turn')).toBe(false);
   });
 
@@ -680,7 +702,7 @@ describe('App', () => {
     act(() => {
       jest.advanceTimersByTime(2000);
     });
-    expect(hasText(root, 'Admiral Byte fired at')).toBe(true);
+    expect(hasText(root, 'Capt. Varga fired at')).toBe(true);
     expect(hasText(root, 'Choose a target')).toBe(true);
     // And the human can actually act again.
     pressCell(root, 'F6');
@@ -879,5 +901,9 @@ describe('App', () => {
     });
     expect(hasText(root, 'You win!')).toBe(true);
     expect(hasText(root, 'wins!')).toBe(false);
+    // A save keeps the names it was started with: this one predates the
+    // commanders, and its opponent is still Admiral Byte, not Normal's commander.
+    expect(hasText(root, 'Admiral Byte')).toBe(true);
+    expect(hasText(root, 'Capt. Varga')).toBe(false);
   });
 });

@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
+import { OPPONENTS } from '../opponents';
 import { Segmented } from '../components/Segmented';
 import { makeStyles, radius, spacing, useTheme } from '../theme';
 
@@ -24,12 +25,6 @@ const DIFFICULTIES: { value: Difficulty; label: string }[] = [
   { value: 'normal', label: 'Normal' },
   { value: 'hard', label: 'Hard' },
 ];
-
-const DIFFICULTY_BLURB: Record<Difficulty, string> = {
-  easy: 'Fires loosely and rarely repositions.',
-  normal: 'Hunts methodically and chases hits.',
-  hard: 'Reads your splashes to hunt the quadrant you moved into.',
-};
 
 export function HomeScreen({ difficulty, onDifficultyChange, loaded, onStart, onSettings, notice, resume }: Props) {
   const styles = useStyles();
@@ -60,7 +55,9 @@ export function HomeScreen({ difficulty, onDifficultyChange, loaded, onStart, on
       {loaded && (
         <>
           <Segmented label="Computer skill" options={DIFFICULTIES} value={difficulty} onChange={onDifficultyChange} />
-          <Text style={styles.blurb}>{DIFFICULTY_BLURB[difficulty]}</Text>
+          <Text style={styles.blurb}>
+            <Text style={styles.opponent}>{OPPONENTS[difficulty].name}.</Text> {OPPONENTS[difficulty].blurb}
+          </Text>
         </>
       )}
 
@@ -139,6 +136,7 @@ const useStyles = makeStyles(({ palette: p, type: ty }) => ({
   resumeLabel: { ...ty.label, color: p.accent.text },
   resumeMeta: { ...ty.caption, color: p.ink.secondary },
   blurb: { ...ty.caption, color: p.ink.secondary, marginTop: -spacing.xs },
+  opponent: { ...ty.caption, fontWeight: '700', color: p.ink.primary },
   rules: {
     backgroundColor: p.surface.raised,
     borderColor: p.surface.border,

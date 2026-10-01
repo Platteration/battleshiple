@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import { Quadrant, Splash } from '../../engine';
 import { useReduceMotion } from '../../motion';
 import { useSettings } from '../../settings';
+import { firstSight } from '../once';
 import { makeStyles } from '../theme';
 
 interface Props {
@@ -20,19 +21,6 @@ export const INTEL = Object.freeze({
   rippleMs: 1100,
 });
 
-/**
- * Splashes whose ripple has already played, by `quadrant:turn`. Module-level,
- * so switching tabs (which remounts the board) or any re-render never plays
- * the same report twice. Bounded: only recent reports can be on screen.
- */
-const played: string[] = [];
-function firstSight(key: string): boolean {
-  if (played.includes(key)) return false;
-  played.push(key);
-  if (played.length > 16) played.shift();
-  return true;
-}
-
 const ORIGIN: Record<Quadrant, { x: 0 | 1; y: 0 | 1 }> = {
   NW: { x: 0, y: 0 },
   NE: { x: 1, y: 0 },
@@ -43,7 +31,7 @@ const ORIGIN: Record<Quadrant, { x: 0 | 1; y: 0 | 1 }> = {
 /** One expanding ring, played once, then gone. */
 function Ripple({ diameter }: { diameter: number }) {
   const styles = useStyles();
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const run = Animated.timing(progress, {
       toValue: 1,
@@ -89,7 +77,7 @@ function Sector({ splash, side, animate }: { splash: Splash; side: number; anima
   const styles = useStyles();
   const key = `${splash.quadrant}:${splash.turn}`;
   // Decided once per mount, so a re-render cannot flip it.
-  const [ripple] = useState(() => animate && firstSight(key));
+  const [ripple] = useState(() => animate && firstSight(`splash:${key}`));
   const { x, y } = ORIGIN[splash.quadrant];
   const gap = Math.max(6, side * INTEL.hatchGap);
   const lines = Math.ceil((side * 2) / gap);

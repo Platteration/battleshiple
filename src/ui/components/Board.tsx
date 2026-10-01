@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Coord, Quadrant, Splash } from '../../engine';
 import { CellView, Grid, HullView } from '../boardView';
 import { makeStyles, useTheme } from '../theme';
-import { Hull } from './Hull';
+import { Hull, Moved } from './Hull';
 import { SplashOverlay } from './SplashOverlay';
 
 interface Props {
@@ -13,6 +13,8 @@ interface Props {
   onPressCell?: (coord: Coord) => void;
   /** Whole hulls, drawn as silhouettes beneath the cells. Damage marks stay in the cells. */
   hulls?: readonly HullView[];
+  /** The viewer's own manoeuvre this turn, played out once on the hull it moved. */
+  moved?: Moved & { shipId: string };
   /** Reported enemy movement, drawn as intel beneath the hulls and marks. */
   splashes?: readonly Splash[];
   disabled?: boolean;
@@ -42,7 +44,8 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
   const fontSize = Math.max(10, size * 0.55);
   const nodes: React.ReactNode[] = [];
 
-  if (cell.ship?.hit) {
+  // A wreck carries one SUNK badge on its hull instead of a mark on every section.
+  if (cell.ship?.hit && !cell.ship.sunk) {
     // A halo under the mark: the hit colour alone is 1.05-2.3:1 on the hull
     // fills. A drawn disc rather than a text shadow, which some platforms drop.
     nodes.push(
@@ -110,7 +113,7 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
   return <>{nodes}</>;
 }
 
-export function Board({ grid, width, onPressCell, hulls = [], splashes = [], disabled }: Props) {
+export function Board({ grid, width, onPressCell, hulls = [], moved, splashes = [], disabled }: Props) {
   const styles = useStyles();
   const size = grid.length;
   const cell = Math.floor(width / (size + 1));
@@ -166,7 +169,7 @@ export function Board({ grid, width, onPressCell, hulls = [], splashes = [], dis
           </View>
           <View testID="board-hulls" pointerEvents="none" style={StyleSheet.absoluteFill}>
             {hulls.map((h) => (
-              <Hull key={h.id} hull={h} cell={cell} />
+              <Hull key={h.id} hull={h} cell={cell} moved={moved?.shipId === h.id ? moved : undefined} />
             ))}
           </View>
           {grid.map((row, r) => (

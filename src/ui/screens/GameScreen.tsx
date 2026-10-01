@@ -16,7 +16,7 @@ import {
   shipAt,
   shipsRemaining,
 } from '../../engine';
-import { buildFleetView, buildTrackingView, fleetHulls, trackingHulls } from '../boardView';
+import { buildFleetView, buildTrackingView, fleetHulls, hullOf, trackingHulls } from '../boardView';
 import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { FleetStatus } from '../components/FleetStatus';
@@ -100,6 +100,16 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
   const trackingGrid = useMemo(() => buildTrackingView(view, target), [view, target]);
   const wrecks = useMemo(() => trackingHulls(view), [view]);
   const myHulls = useMemo(() => fleetHulls(view, selectedShipId), [view, selectedShipId]);
+  // Your own manoeuvre this turn, for the board to play out once. From view.log,
+  // which is visibleLog: the opponent's manoeuvres are not in it to animate.
+  const moved = useMemo(() => {
+    const entry = [...view.log].reverse().find((e) => e.kind === 'move' && e.by === viewer && e.turn === view.turn && e.move);
+    const ship = entry?.move && me.ships.find((s) => s.id === entry.move!.shipId);
+    if (!entry?.move || !ship) return undefined;
+    const from = hullOf({ ...ship, bow: entry.move.from.bow, heading: entry.move.from.heading });
+    const to = entry.move.to;
+    return { shipId: ship.id, from, key: `${entry.turn}:${ship.id}:${to.bow.r},${to.bow.c},${to.heading}` };
+  }, [view, viewer, me.ships]);
   const fleetGrid = useMemo(
     () => buildFleetView(view, { selectedShipId, preview }),
     [view, selectedShipId, preview],
@@ -203,7 +213,7 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
         {big === 'enemy' ? (
           <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes} disabled={!myTurn || phase !== 'fire'} />
         ) : (
-          <Board grid={fleetGrid} hulls={myHulls} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
+          <Board grid={fleetGrid} hulls={myHulls} moved={moved} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
         )}
 
         {statusLine ? (

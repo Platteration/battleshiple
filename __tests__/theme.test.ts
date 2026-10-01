@@ -95,6 +95,7 @@ function pairings(p: Palette): [string, string, string, number][] {
     ['contact report on water', p.intel.stroke, p.board.water, GRAPHIC_MIN],
     ['selection on water', p.selected, p.board.water, GRAPHIC_MIN],
     ['stamp on paper', p.stamp.ink, p.surface.base, GRAPHIC_MIN],
+    ['SUNK badge text on its badge', p.stamp.ink, p.surface.base, TEXT_MIN],
     ['legal preview outline', p.preview.okStroke, p.board.water, GRAPHIC_MIN],
     ['illegal preview outline', p.preview.badStroke, p.board.water, GRAPHIC_MIN],
     ['token outline on water', p.token.stroke, p.board.water, GRAPHIC_MIN],

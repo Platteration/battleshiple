@@ -96,7 +96,7 @@ describe('Board with hulls', () => {
     expect(onPress).toHaveBeenCalledWith({ r: 2, c: 4 });
   });
 
-  test('a wreck is drawn without deck details or a bow arrow', () => {
+  test('a wreck is drawn without deck details or a bow arrow, and badged SUNK', () => {
     const wreck = { ...makeShip('carrier', { r: 0, c: 4 }, 'E'), hits: [true, true, true, true, true] };
     act(() => {
       renderer = create(
@@ -107,6 +107,7 @@ describe('Board with hulls', () => {
     });
     const footprint = renderer.root.find((n) => n.props.testID === 'hull-footprint-carrier' && String(n.type) === 'View');
     expect(footprint.findAll((n) => n.props.testID === 'hull-detail-carrier')).toHaveLength(0);
-    expect(footprint.findAll((n) => String(n.type) === 'Text')).toHaveLength(0);
+    // No bow arrow: the one text on a wreck is its SUNK badge (uppercase by style).
+    expect(footprint.findAll((n) => String(n.type) === 'Text').map((n) => n.children.join(''))).toEqual(['Sunk']);
   });
 });

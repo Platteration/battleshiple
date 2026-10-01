@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Modal, ScrollView, Text, View } from 'react-native';
 import {
   Coord,
   Maneuver,
@@ -10,6 +10,7 @@ import {
   afloatCount,
   checkManeuver,
   coordLabel,
+  describeManeuver,
   isSunk,
   projectedCells,
   shipAt,
@@ -20,8 +21,9 @@ import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { FleetStatus } from '../components/FleetStatus';
 import { ManeuverPanel } from '../components/ManeuverPanel';
+import { MiniPlot } from '../components/MiniPlot';
 import { Screen } from '../components/Screen';
-import { useBoardWidth } from '../hooks';
+import { useGameLayout } from '../layout';
 import { makeStyles, radius, spacing } from '../theme';
 
 interface Props {
@@ -37,7 +39,9 @@ interface Props {
   onQuit: () => void;
 }
 
-type Tab = 'enemy' | 'fleet';
+type Side = 'enemy' | 'fleet';
+
+const SIDE_NAME: Record<Side, string> = { enemy: 'Enemy waters', fleet: 'Your fleet' };
 
 /** What happened to the viewer since their last turn, phrased without leaking enemy moves. */
 function incomingReport(view: PlayerView): string[] {
@@ -67,24 +71,22 @@ function incomingReport(view: PlayerView): string[] {
 
 export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }: Props) {
   const styles = useStyles();
-  const width = useBoardWidth();
+  const { boardWidth: width, compact } = useGameLayout();
   const { me, enemy, viewer } = view;
   const myTurn = view.current === viewer && !busy;
   const phase = view.phase;
 
-  const [tab, setTab] = useState<Tab>('enemy');
+  // A look at the other board, from the mini-map. The turn moving on ends it.
+  const [peek, setPeek] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [target, setTarget] = useState<Coord | undefined>();
   const [selectedShipId, setSelectedShipId] = useState<string | undefined>();
   const [pending, setPending] = useState<Maneuver | null>(null);
 
   // Follow the phase: aim on the enemy board, manoeuvre on your own.
   useEffect(() => {
-    if (phase === 'fire') {
-      setTab('enemy');
-      setTarget(undefined);
-    } else if (phase === 'maneuver') {
-      setTab('fleet');
-    }
+    if (phase === 'fire') setTarget(undefined);
+    setPeek(false);
     setSelectedShipId(undefined);
     setPending(null);
   }, [phase, view.turn]);
@@ -103,9 +105,19 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
     [view, selectedShipId, preview],
   );
 
-  const report = useMemo(() => incomingReport(view), [view]);
-  const recentLog = useMemo(() => view.log.slice(-4).reverse(), [view]);
+  const fullReport = useMemo(() => incomingReport(view), [view]);
+  // A short screen keeps the newest line; the log below still has the rest.
+  const report = compact ? fullReport.slice(-1) : fullReport;
+  // The strip shows what happened since your last turn; with nothing new, the latest log line.
+  const lastLog = view.log[view.log.length - 1];
+  const strip = report.length > 0 ? report : lastLog ? [lastLog.text] : [];
   const hasMoved = !!view.maneuveredShipId;
+
+  // The large board is the one you act on: your fleet while you manoeuvre, enemy waters otherwise.
+  const acting: Side = myTurn && phase === 'maneuver' ? 'fleet' : 'enemy';
+  const big: Side = peek ? (acting === 'enemy' ? 'fleet' : 'enemy') : acting;
+  const small: Side = big === 'enemy' ? 'fleet' : 'enemy';
+  const miniSize = compact ? 48 : 64;
 
   function onPressEnemyCell(coord: Coord) {
     if (!myTurn || phase !== 'fire') return;
@@ -131,10 +143,12 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
   const lastShot = view.lastShot;
   let statusLine = '';
   if (busy) statusLine = `${enemy.name} is taking their turn…`;
-  else if (phase === 'fire') statusLine = target ? `Target ${coordLabel(target)} locked. Fire when ready.` : 'Choose a target in enemy waters.';
+  // With no target the action bar itself says what to do; the line stays empty rather than repeat it.
+  else if (phase === 'fire') statusLine = target ? `Target ${coordLabel(target)} locked. Fire when ready.` : '';
   else if (phase === 'maneuver' && lastShot && lastShot.by === viewer) {
     const label = coordLabel(lastShot.coord);
-    if (lastShot.result === 'miss') statusLine = `${label}: splash, miss.`;
+    // Not "splash, miss": a splash is the manoeuvre report, and a miss is not one.
+    if (lastShot.result === 'miss') statusLine = `${label}: miss.`;
     else if (lastShot.sunk) statusLine = `${label}: HIT – enemy ${SHIP_CLASSES[lastShot.sunk.classId].name} sunk!`;
     else if (lastShot.alreadyDamaged) statusLine = `${label}: hit, but that section was already wrecked.`;
     else statusLine = `${label}: HIT!`;
@@ -144,109 +158,148 @@ export function GameScreen({ view, busy, onFire, onManeuver, onEndTurn, onQuit }
   const turnNumber = Math.floor(view.turn / 2) + 1;
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{me.name}</Text>
-          <Text style={styles.turn}>Turn {turnNumber}</Text>
-        </View>
-        <Text style={styles.fleetCount}>
-          Your ships: {shipsRemaining(me.ships)}/{me.ships.length} · Enemy ships: {afloatCount(enemy.fleet)}/
-          {enemy.fleet.length}
-        </Text>
-      </View>
-
-      {report.length > 0 && (
-        <View style={styles.report}>
-          {report.map((line, i) => (
-            <Text key={i} style={styles.reportText}>
-              {line}
+    <Screen scroll={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>{me.name}</Text>
+              <Text style={styles.turn}>Turn {turnNumber}</Text>
+            </View>
+            <Text style={styles.fleetCount}>
+              Afloat: {shipsRemaining(me.ships)}/{me.ships.length} · Enemy: {afloatCount(enemy.fleet)}/{enemy.fleet.length}
             </Text>
-          ))}
+          </View>
+          <MiniPlot
+            size={miniSize}
+            label={`Show ${SIDE_NAME[small].toLowerCase()}`}
+            grid={small === 'enemy' ? trackingGrid : fleetGrid}
+            hulls={small === 'enemy' ? wrecks : myHulls}
+            splashes={small === 'enemy' ? me.splashes : []}
+            onPress={() => setPeek((v) => !v)}
+          />
+          <Button title="Quit to menu" variant="ghost" small onPress={onQuit} />
         </View>
-      )}
 
-      <View style={styles.tabs} accessibilityRole="tablist">
-        {(['enemy', 'fleet'] as Tab[]).map((t) => (
-          <Pressable
-            key={t}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === t }}
-            onPress={() => setTab(t)}
-            style={[styles.tab, tab === t && styles.tabActive]}
-          >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'enemy' ? 'Enemy waters' : 'Your fleet'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+        {strip.length > 0 && (
+          <View style={[styles.report, report.length === 0 && styles.reportQuiet]}>
+            {/* The lines are never inside a Pressable: the log button is their sibling. */}
+            <View style={styles.reportLines}>
+              {strip.map((line, i) => (
+                // Two lines at most, so the board keeps its size; the log has every word.
+                <Text key={i} style={styles.reportText} numberOfLines={2}>
+                  {line}
+                </Text>
+              ))}
+            </View>
+            <Button title="Log" variant="ghost" small onPress={() => setLogOpen(true)} />
+          </View>
+        )}
 
-      {tab === 'enemy' ? (
-        <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes} disabled={!myTurn || phase !== 'fire'} />
-      ) : (
-        <Board grid={fleetGrid} hulls={myHulls} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
-      )}
+        {/* Only while peeking: otherwise the board is the one the turn is about, and
+            the status line and action bar already say which. */}
+        {peek && <Text style={styles.caption}>{SIDE_NAME[big]} · tap the plot to return</Text>}
 
-      <Text style={styles.status}>{statusLine}</Text>
+        {big === 'enemy' ? (
+          <Board grid={trackingGrid} hulls={wrecks} width={width} onPressCell={onPressEnemyCell} splashes={me.splashes} disabled={!myTurn || phase !== 'fire'} />
+        ) : (
+          <Board grid={fleetGrid} hulls={myHulls} width={width} onPressCell={onPressFleetCell} disabled={!myTurn || phase !== 'maneuver'} />
+        )}
 
-      {myTurn && phase === 'fire' && (
-        <Button title={target ? `FIRE at ${coordLabel(target)}` : 'Select a target'} disabled={!target} onPress={() => target && onFire(target)} />
-      )}
+        {statusLine ? (
+          <Text style={styles.status} numberOfLines={2}>
+            {statusLine}
+          </Text>
+        ) : null}
 
-      {myTurn && phase === 'maneuver' && (
-        <View style={styles.maneuverBlock}>
-          {!hasMoved && (
-            <>
+        {myTurn && phase === 'maneuver' && !hasMoved && (
+          <>
+            {!compact && (
               <FleetStatus
                 ships={me.ships}
                 selectedId={selectedShipId}
                 onSelect={(ship) => {
                   setSelectedShipId(ship.id);
                   setPending(null);
-                  setTab('fleet');
+                  setPeek(false);
                 }}
                 compact
               />
-              <ManeuverPanel
-                ship={selectedShip}
-                fleet={me.ships}
-                pending={pending}
-                onPick={(m) => {
-                  setPending(m);
-                  setTab('fleet');
-                }}
-                onConfirm={confirmManeuver}
-                onCancel={() => setPending(null)}
-              />
-            </>
-          )}
-          <Button title={hasMoved ? 'End turn' : 'Hold position & end turn'} variant={hasMoved ? 'primary' : 'secondary'} onPress={onEndTurn} />
+            )}
+            <ManeuverPanel
+              ship={selectedShip}
+              fleet={me.ships}
+              pending={pending}
+              compact={compact}
+              onPick={(m) => {
+                setPending(m);
+                setPeek(false);
+              }}
+            />
+          </>
+        )}
+
+        {big === 'fleet' && phase !== 'maneuver' && !compact && <FleetStatus ships={me.ships} compact />}
+      </ScrollView>
+
+      <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
+        <View style={styles.sheetScrim}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Signal log</Text>
+            {/* view.log is visibleLog: the opponent's manoeuvres were never in it. */}
+            <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
+              {view.log.length === 0 ? <Text style={styles.sheetEmpty}>No signals yet.</Text> : null}
+              {[...view.log].reverse().map((e, i) => (
+                <Text key={`${e.turn}-${i}`} style={styles.sheetLine}>
+                  {e.text}
+                </Text>
+              ))}
+            </ScrollView>
+            <Button title="Close" variant="secondary" onPress={() => setLogOpen(false)} />
+          </View>
         </View>
-      )}
+      </Modal>
 
-      {tab === 'fleet' && phase === 'fire' && <FleetStatus ships={me.ships} compact />}
-
-      <View style={styles.log}>
-        {recentLog.map((e, i) => (
-          <Text key={`${e.turn}-${i}`} style={styles.logText}>
-            {e.text}
-          </Text>
-        ))}
+      {/* Pinned outside the scroll view: the one action this turn needs is never below the fold. */}
+      <View style={styles.actionBar}>
+        {myTurn && phase === 'fire' && (
+          <Button
+            title={target ? `FIRE at ${coordLabel(target)}` : 'Choose a target in enemy waters'}
+            variant={target ? 'primary' : 'secondary'}
+            disabled={!target}
+            onPress={() => target && onFire(target)}
+          />
+        )}
+        {myTurn && phase === 'maneuver' && pending && (
+          <View style={styles.actionRow}>
+            <View style={styles.flex}>
+              <Button variant="ghost" title="Cancel" onPress={() => setPending(null)} />
+            </View>
+            <View style={styles.flex2}>
+              <Button title={`Confirm: ${describeManeuver(pending)}`} disabled={!preview?.ok} onPress={confirmManeuver} />
+            </View>
+          </View>
+        )}
+        {myTurn && phase === 'maneuver' && !pending && (
+          <Button title={hasMoved ? 'End turn' : 'Hold position & end turn'} variant={hasMoved ? 'primary' : 'secondary'} onPress={onEndTurn} />
+        )}
       </View>
-
-      <Button title="Quit to menu" variant="ghost" small onPress={onQuit} />
     </Screen>
   );
 }
 
 const useStyles = makeStyles(({ palette: p, type: ty }) => ({
-  header: { gap: 2 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  scroll: { flex: 1 },
+  content: { gap: spacing.sm, paddingBottom: spacing.sm },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerText: { flex: 1, gap: 2 },
+  titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
   title: { ...ty.title, color: p.accent.text },
   turn: { ...ty.label, color: p.ink.secondary },
   fleetCount: { ...ty.caption, color: p.ink.secondary },
   report: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: p.intel.fill,
     borderColor: p.intel.stroke,
     borderWidth: 1,
@@ -254,14 +307,28 @@ const useStyles = makeStyles(({ palette: p, type: ty }) => ({
     padding: spacing.sm,
     gap: 2,
   },
+  reportQuiet: { backgroundColor: 'transparent', borderColor: p.surface.border },
+  reportLines: { flex: 1, gap: 2 },
   reportText: { ...ty.teletype, color: p.ink.primary },
-  tabs: { flexDirection: 'row', backgroundColor: p.surface.raised, borderRadius: radius.md, padding: 3 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: radius.sm },
-  tabActive: { backgroundColor: p.accent.fill },
-  tabText: { ...ty.action, fontSize: 14, lineHeight: 18, color: p.ink.secondary },
-  tabTextActive: { color: p.ink.onAccent },
+  caption: { ...ty.label, color: p.ink.secondary, textAlign: 'center' },
   status: { ...ty.heading, fontSize: 15, lineHeight: 20, color: p.ink.primary, textAlign: 'center', minHeight: 20 },
-  maneuverBlock: { gap: spacing.sm },
-  log: { gap: 2, paddingHorizontal: spacing.xs },
-  logText: { ...ty.teletype, fontSize: 12, lineHeight: 16, color: p.ink.secondary },
+  // Tall enough for one button whether or not it is your turn, so the board never shifts.
+  actionBar: { paddingTop: spacing.sm, minHeight: 56 },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  flex: { flex: 1 },
+  flex2: { flex: 2 },
+  sheetScrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: p.surface.scrim },
+  sheet: {
+    maxHeight: '75%',
+    backgroundColor: p.surface.raised,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  sheetTitle: { ...ty.title, color: p.accent.text },
+  sheetList: { flexGrow: 0 },
+  sheetListContent: { gap: spacing.xs },
+  sheetLine: { ...ty.teletype, color: p.ink.primary },
+  sheetEmpty: { ...ty.caption, color: p.ink.secondary },
 }));

@@ -94,7 +94,7 @@ the `version` in `app.json`, which the contract test keeps `package.json` in ste
 URL but `SOURCE_URL`, and pins `Linking.openURL(SOURCE_URL)` — handed to the browser with a
 `.catch`, since Android rejects when nothing answers the intent — as the only `openURL` in the
 tree. On the board, the locked target cell is exposed as `selected`, so a screen reader is
-told which cell FIRE will act on; the game tabs are a `tablist`, and the shared `Segmented`
+told which cell FIRE will act on; the game screen shows one large board, the one the turn acts on, and the other as a mini-map that is a single button named for the board it shows ("Show your fleet"), never a grid of cells, so a cell label stays unique; the shared `Segmented`
 is a named `radiogroup`. `__tests__/splash.test.tsx` pins that reduce motion drops only the ripple, never
 the reported quadrant.
 

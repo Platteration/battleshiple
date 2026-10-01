@@ -196,7 +196,7 @@ describe('App', () => {
     expect(hasText(root, 'End turn')).toBe(true);
   });
 
-  test('the setup chips, board cells, tabs and fleet cards carry roles and states for a screen reader', () => {
+  test('the setup chips, board cells, board switch and fleet cards carry roles and states for a screen reader', () => {
     const root = renderer.root;
     // A Pressable and the Views it renders all carry the props; the outermost node of each is counted once.
     const outer = (nodes: ReactTestInstance[]) =>
@@ -217,10 +217,12 @@ describe('App', () => {
 
     pressText(root, 'Random');
     pressText(root, 'Start battle');
-    expect(root.findAll((n) => n.props.accessibilityRole === 'tablist').length).toBeGreaterThan(0);
-    let tabs = outer(root.findAll((n) => n.props.accessibilityRole === 'tab'));
-    expect(tabs).toHaveLength(2);
-    expect(tabs.map((t) => t.props.accessibilityState.selected)).toEqual([true, false]);
+    // The Enemy/Fleet tabs became one large board and a mini-map of the other.
+    // What a screen reader needs from them is unchanged: which board is shown,
+    // and a named control that shows the other. The mini-map is that control.
+    const switchTo = (label: string) => outer(root.findAll((n) => n.props.accessibilityLabel === label));
+    expect(switchTo('Show your fleet').map((n) => n.props.accessibilityRole)).toEqual(['button']);
+    expect(switchTo('Show enemy waters')).toHaveLength(0);
 
     const cells = labelled(/^[A-J](10|[1-9])$/);
     expect(cells).toHaveLength(100);
@@ -232,9 +234,9 @@ describe('App', () => {
     expect(locked.map((n) => n.props.accessibilityLabel)).toEqual(['E5']);
 
     pressText(root, 'FIRE at E5');
-    // The manoeuvre phase switches to the fleet tab, whose cards are pressable.
-    tabs = outer(root.findAll((n) => n.props.accessibilityRole === 'tab'));
-    expect(tabs.map((t) => t.props.accessibilityState.selected)).toEqual([false, true]);
+    // The manoeuvre phase shows the fleet, whose cards are pressable, and the switch now offers enemy waters.
+    expect(switchTo('Show enemy waters').map((n) => n.props.accessibilityRole)).toEqual(['button']);
+    expect(switchTo('Show your fleet')).toHaveLength(0);
     const cards = labelled(/, (ready|sunk|ready in \d+)$/);
     expect(cards).toHaveLength(5);
     for (const card of cards) expect(card.props.accessibilityRole).toBe('button');
@@ -703,10 +705,15 @@ describe('App', () => {
 
     pressText(root, 'Resume game');
     // Whoever picks the device up must not be shown the board straight away.
+    // This used to look for the "Enemy waters" tab, always on screen with the
+    // board; the tabs are gone, and this battle resumes in the manoeuvre phase,
+    // whose board is "Your fleet". The board's own cells are the direct check.
+    const boardCells = () => root.findAll((n) => n.props.accessibilityLabel === 'A1' && typeof n.props.onPress === 'function');
     expect(hasText(root, 'Pass the device to')).toBe(true);
     expect(hasText(root, 'Enemy waters')).toBe(false);
+    expect(boardCells()).toHaveLength(0);
     pressText(root, 'ready');
-    expect(hasText(root, 'Enemy waters')).toBe(true);
+    expect(boardCells().length).toBeGreaterThan(0);
   });
 
   test('illegal manoeuvres are not offered: mobility gates the controls', () => {

@@ -72,7 +72,8 @@ async function cell(page, label) {
 /** Click the first manoeuvre that is actually legal for this layout. */
 async function pickManeuver(page) {
   for (const label of ['Ahead 2', 'Ahead 1', 'Port', 'Starboard', 'Turn CW', 'Turn CCW']) {
-    const b = page.getByText(label, { exact: false }).first();
+    // By accessibility label: a compact screen draws the helm as glyphs only.
+    const b = page.getByLabel(label, { exact: true }).first();
     if ((await b.count()) && (await b.isEnabled())) {
       await b.click();
       await page.waitForTimeout(280);
@@ -80,6 +81,22 @@ async function pickManeuver(page) {
     }
   }
   return null;
+}
+
+/**
+ * Select one of your ships. The roster strip has a chip per ship; a compact
+ * (short) screen has no roster, and there a player taps the hull itself, so
+ * this clicks the middle of its silhouette. The hull layer takes no pointer
+ * events, so the click lands on the cell above it, as a finger would.
+ */
+async function selectShip(page, classId, name) {
+  const chip = page.getByText(name, { exact: false }).first();
+  if (await chip.isVisible().catch(() => false)) {
+    await chip.click();
+  } else {
+    await page.getByTestId(`hull-footprint-${classId}`).first().click({ force: true });
+  }
+  await page.waitForTimeout(250);
 }
 
 /** Either the current splash banner text or the contact-report test id. */
@@ -146,6 +163,23 @@ function nearlyWonSave() {
   });
 }
 
+/**
+ * The tallest the game screen gets, which normal play reaches only by chance:
+ * the manoeuvre phase of a turn that opened with an incoming hit and a splash,
+ * so the report carries both while the helm is up. The board must still fit.
+ */
+function worstTurnSave() {
+  const save = JSON.parse(nearlyWonSave());
+  const st = save.state;
+  // The enemy fleet afloat, so the game is not one shot from over.
+  st.players[1].ships = st.players[1].ships.map((s) => ({ ...s, hits: s.hits.map(() => false) }));
+  st.phase = 'maneuver';
+  st.lastShot = { by: 0, coord: { r: 9, c: 9 }, result: 'miss', alreadyDamaged: false, gameOver: false };
+  st.players[0].lastIncoming = { r: 2, c: 4, result: 'hit', turn: st.turn - 1, classId: 'battleship', sunk: false };
+  st.players[0].splashes = [{ quadrant: 'NW', turn: st.turn - 1 }];
+  return JSON.stringify(save);
+}
+
 async function run(browser, cfg, errors) {
   const label = `${cfg.viewport.name}-${cfg.scheme}${cfg.motion === 'reduce' ? '-still' : ''}`;
   const dir = path.join(OUT, label);
@@ -203,7 +237,7 @@ async function run(browser, cfg, errors) {
 
   await cell(page, 'E5');
   await tap(page, 'FIRE at E5');
-  await tap(page, 'Patrol Boat');
+  await selectShip(page, 'patrol', 'Patrol Boat');
   const picked = await pickManeuver(page);
   await shot('05-maneuver-preview');
   const maneuverOverflow = await overflow(page);
@@ -253,9 +287,12 @@ async function run(browser, cfg, errors) {
     await tap(endPage, 'Resume game');
     await endPage.waitForTimeout(300);
     await endPage.screenshot({ path: path.join(dir, '09-wrecks.png') });
-    await tap(endPage, 'Your fleet');
+    // The mini-map beside the header shows the other board; pressing it peeks.
+    await endPage.getByLabel('Show your fleet', { exact: true }).click();
+    await endPage.waitForTimeout(250);
     await endPage.screenshot({ path: path.join(dir, '10-fleet-damage.png') });
-    await tap(endPage, 'Enemy waters');
+    await endPage.getByLabel('Show enemy waters', { exact: true }).click();
+    await endPage.waitForTimeout(250);
     await cell(endPage, 'B9');
     await tap(endPage, 'FIRE at B9');
     await endPage.waitForTimeout(1200); // the win holds on the board briefly
@@ -265,8 +302,26 @@ async function run(browser, cfg, errors) {
     errors.push(`[${label}] could not reach game over: ${e.message}`);
   }
 
+  // Worst turn: resume it, select a ship, pick a manoeuvre, measure.
+  let worstOverflow = null;
+  const worstPage = await context.newPage();
+  worstPage.on('pageerror', (e) => errors.push(`[${label}] PAGEERROR (worst): ${e.message}`));
+  await worstPage.goto(URL, { waitUntil: 'domcontentloaded' });
+  await worstPage.evaluate((save) => localStorage.setItem('battleshiple:savegame:v1', save), worstTurnSave());
+  await worstPage.reload({ waitUntil: 'networkidle' });
+  await worstPage.waitForTimeout(600);
+  try {
+    await tap(worstPage, 'Resume game');
+    await selectShip(worstPage, 'patrol', 'Patrol Boat');
+    await pickManeuver(worstPage);
+    await worstPage.screenshot({ path: path.join(dir, '11-worst-turn.png') });
+    worstOverflow = await overflow(worstPage);
+  } catch (e) {
+    errors.push(`[${label}] could not reach the worst turn: ${e.message}`);
+  }
+
   await context.close();
-  return { label, picked, splashed, hunted: cfg.hunt, fireOverflow, maneuverOverflow, reachedEnd };
+  return { label, picked, splashed, hunted: cfg.hunt, fireOverflow, maneuverOverflow, worstOverflow, reachedEnd };
 }
 
 (async () => {
@@ -282,11 +337,11 @@ async function run(browser, cfg, errors) {
   }
   await browser.close();
 
-  console.log('\n  config              manoeuvre     splash  end   overflow(fire/manoeuvre)');
+  console.log('\n  config              manoeuvre     splash  end   overflow(fire/manoeuvre/worst turn)');
   for (const r of results) {
     const splash = r.hunted ? (r.splashed ? 'seen' : 'NONE') : '-';
     console.log(
-      `  ${r.label.padEnd(20)}${String(r.picked).padEnd(14)}${splash.padEnd(8)}${(r.reachedEnd ? 'yes' : 'NO').padEnd(6)}${r.fireOverflow}px / ${r.maneuverOverflow}px`,
+      `  ${r.label.padEnd(20)}${String(r.picked).padEnd(14)}${splash.padEnd(8)}${(r.reachedEnd ? 'yes' : 'NO').padEnd(6)}${r.fireOverflow}px / ${r.maneuverOverflow}px / ${r.worstOverflow}px`,
     );
   }
   console.log(errors.length ? '\nERRORS:\n' + errors.slice(0, 20).join('\n') : '\nno console errors');

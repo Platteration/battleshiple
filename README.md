@@ -153,6 +153,13 @@ battleship's three turrets, the destroyer's two, the submarine's sail and the
 patrol boat's cabin. The Theme setting picks Light, Dark, or System, which follows the
 device (and is dark on one that reports no preference).
 
+During a match the large board is the one the turn acts on: enemy waters while
+you aim, your fleet while you manoeuvre. The other sits beside the header as a
+mini-map; tap it to peek. What happened since your last turn is one report strip,
+with the whole signal log behind it, and the one action the turn needs (FIRE,
+Confirm, End turn) sits in a bar pinned to the bottom. Every phase fits on a
+360x640 phone without scrolling; `tools/screenshots.js` measures it.
+
 Colours live in semantic roles in `src/ui/theme/`, never in components; a test
 fails if a colour literal appears anywhere else. Every pairing the UI draws is
 checked against WCAG — 4.5:1 for text, 3:1 for marks, lines and outlines — in

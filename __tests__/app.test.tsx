@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
-import { Alert, Platform, StyleSheet, Text } from 'react-native';
+import { Alert, Animated, Platform, StyleSheet, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import App from '../App';
 import { fire } from '../src/engine';
@@ -9,6 +9,7 @@ import { seededRng } from '../src/engine/random';
 import { randomFleet } from '../src/engine/ships';
 import { loadGame } from '../src/storage';
 import { ErrorBoundary } from '../src/ui/components/ErrorBoundary';
+import { FADE_MS } from '../src/ui/components/FadeIn';
 import { dark, light } from '../src/ui/theme';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -189,6 +190,33 @@ describe('App', () => {
     expect(hasText(root, 'Pass the device to')).toBe(true);
     pressText(root, 'ready');
     expect(hasText(root, 'Player 1 fired at A1')).toBe(true);
+  });
+
+  test('every screen entered fades in once, and a re-render of the same screen does not', () => {
+    const timing = jest.spyOn(Animated, 'timing');
+    try {
+      const fades = () => timing.mock.calls.filter((c) => (c[1] as { duration?: number }).duration === FADE_MS).length;
+      const root = renderer.root;
+      pressText(root, 'Pass & Play');
+      expect(fades()).toBe(1);
+      // Same screen, new state: no fade.
+      pressText(root, 'Random');
+      expect(fades()).toBe(1);
+      pressText(root, 'Start battle');
+      expect(hasText(root, 'Pass the device to')).toBe(true);
+      expect(fades()).toBe(2);
+      pressText(root, 'ready');
+      expect(fades()).toBe(3);
+      pressText(root, 'Random');
+      pressText(root, 'Start battle');
+      pressText(root, 'ready');
+      expect(hasText(root, 'Choose a target')).toBe(true);
+      expect(fades()).toBe(5);
+      pressCell(root, 'A1');
+      expect(fades()).toBe(5);
+    } finally {
+      timing.mockRestore();
+    }
   });
 
   test('manual placement rejects overlaps and the manoeuvre preview/confirm flow works', () => {

@@ -332,6 +332,25 @@ async function run(browser, cfg, errors) {
     errors.push(`[${label}] could not reach the worst turn: ${e.message}`);
   }
 
+  // The pass-the-device cover: player 1 deploys, and player 2 is asked for the device.
+  const handPage = await context.newPage();
+  handPage.on('pageerror', (e) => errors.push(`[${label}] PAGEERROR (handoff): ${e.message}`));
+  // The planted saves above share this context's storage; with one there,
+  // starting a match asks first. Start from an empty menu instead.
+  await handPage.goto(URL, { waitUntil: 'domcontentloaded' });
+  await handPage.evaluate(() => localStorage.removeItem('battleshiple:savegame:v1'));
+  await handPage.reload({ waitUntil: 'networkidle' });
+  await handPage.waitForTimeout(400);
+  try {
+    await tap(handPage, 'Pass & Play');
+    await tap(handPage, 'Random');
+    await tap(handPage, 'Start battle');
+    await handPage.waitForTimeout(400);
+    await handPage.screenshot({ path: path.join(dir, '13-handoff.png') });
+  } catch (e) {
+    errors.push(`[${label}] could not reach the handoff: ${e.message}`);
+  }
+
   await context.close();
   return { label, picked, splashed, hunted: cfg.hunt, fireOverflow, maneuverOverflow, worstOverflow, reachedEnd };
 }

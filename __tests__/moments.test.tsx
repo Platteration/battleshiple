@@ -153,3 +153,51 @@ describe('a wreck is badged SUNK, once, instead of a mark on every section', () 
     expect(fades()).toBe(1);
   });
 });
+
+describe('screens fade in, never out', () => {
+  // FadeIn reads the motion hook mocked above.
+  const { FadeIn, FADE_MS } = jest.requireActual('../src/ui/components/FadeIn') as typeof import('../src/ui/components/FadeIn');
+  const fades = () => timing.mock.calls.filter((c) => (c[1] as { duration?: number }).duration === FADE_MS);
+  const Text = jest.requireActual('react-native').Text;
+
+  test('a screen entering fades from 0 to 1, once per entry', () => {
+    act(() => {
+      renderer = create(
+        <ThemeProvider theme="light">
+          <FadeIn key="a">
+            <Text>first</Text>
+          </FadeIn>
+        </ThemeProvider>,
+      );
+    });
+    expect(fades()).toHaveLength(1);
+    expect((fades()[0]![1] as { toValue: number }).toValue).toBe(1);
+    // The next screen replaces it: the old one is not faded out, the new one fades in.
+    act(() =>
+      renderer.update(
+        <ThemeProvider theme="light">
+          <FadeIn key="b">
+            <Text>second</Text>
+          </FadeIn>
+        </ThemeProvider>,
+      ),
+    );
+    expect(fades()).toHaveLength(2);
+    expect(fades().every((c) => (c[1] as { toValue: number }).toValue === 1)).toBe(true);
+    expect(renderer.root.findAll((n) => String(n.type) === 'Text' && n.children.join('') === 'first')).toHaveLength(0);
+  });
+
+  test('with reduced motion a screen is simply there', () => {
+    reduce.mockReturnValue(true);
+    act(() => {
+      renderer = create(
+        <ThemeProvider theme="light">
+          <FadeIn>
+            <Text>still</Text>
+          </FadeIn>
+        </ThemeProvider>,
+      );
+    });
+    expect(fades()).toHaveLength(0);
+  });
+});

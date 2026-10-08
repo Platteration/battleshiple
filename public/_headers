@@ -1,0 +1,67 @@
+# Response headers for Netlify and Cloudflare Pages, which read this file from the published
+# folder: `npx expo export` copies it there from public/. Apache: public/.htaccess. nginx:
+# deploy/nginx.conf. The three carry the same values. The pages carry the same
+# Content-Security-Policy as a <meta> tag (less frame-ancestors, which a meta tag cannot set) for
+# a host that sends no headers of its own, such as GitHub Pages: 404.html as written, and
+# index.html as scripts/build-web.mjs writes it from the `/*` rule below.
+# __tests__/website.test.ts holds every copy equal, and e2e/run.mjs plays the game under this file.
+#
+# Content-Security-Policy, measured in Chromium with the game played end to end and the policy
+# sent as a response header:
+#   script-src 'self'   the bundle and guard.js; Expo's single-page export writes no inline script.
+#   style-src 'self' 'sha256-47DEQ...'   site.css, and the empty <style> element react-native-web
+#                       creates and then fills through the CSSOM (insertRule), which CSP does not
+#                       govern. The hash is the empty string's: without it the game draws with no
+#                       styles at all. No 'unsafe-inline'.
+#   img-src 'self'      the favicon. The boards and hulls are drawn from views, not images.
+#   connect-src 'none'  the game makes no network request: there is no network code.
+#   frame-ancestors 'none'   nothing is meant to frame the game (clickjacking).
+#   require-trusted-types-for 'script'; trusted-types 'none'   nothing writes HTML from a string.
+#   No font-src, media-src, worker-src or manifest-src: the game uses the platform's own fonts,
+#   plays no sound, starts no worker and does not install, so default-src 'none' refuses them.
+# Referrer-Policy: no address in the game carries anything private (one page, no query, no
+# share link), so a link out says which site it came from and nothing more.
+# Permissions-Policy turns off every feature Chromium knows that a page can ask for: the game
+# uses none of them (a browser cannot vibrate for it; src/ui/feedback.ts sends nothing on the
+# web). Names Chromium does not recognise are left out, since each is a console warning.
+
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: accelerometer=(), attribution-reporting=(), autoplay=(), browsing-topics=(), camera=(), clipboard-read=(), clipboard-write=(), display-capture=(), encrypted-media=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), identity-credentials-get=(), idle-detection=(), join-ad-interest-group=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), otp-credentials=(), payment=(), picture-in-picture=(), private-aggregation=(), publickey-credentials-create=(), publickey-credentials-get=(), run-ad-auction=(), screen-wake-lock=(), serial=(), shared-storage=(), shared-storage-select-url=(), storage-access=(), usb=(), window-management=(), xr-spatial-tracking=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+# Cache lifetimes. The bundle carries a hash of its contents in its name, so it can be kept a
+# year; everything else keeps its name from one deploy to the next and is revalidated on every
+# load. No path matches two of these rules: both hosts join a header that two matching rules set
+# into one comma-separated value.
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/404.html
+  Cache-Control: no-cache
+
+/guard.js
+  Cache-Control: no-cache
+
+/site.css
+  Cache-Control: no-cache
+
+/favicon.ico
+  Cache-Control: no-cache
+
+/robots.txt
+  Cache-Control: no-cache
+
+/.well-known/*
+  Cache-Control: no-cache

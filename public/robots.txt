@@ -1,0 +1,3 @@
+# Battleshiple: the whole game is one page, and every address on the site may be read.
+User-agent: *
+Allow: /

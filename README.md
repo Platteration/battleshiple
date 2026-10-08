@@ -1,6 +1,6 @@
 # Battleshiple
 
-Battleship for iOS and Android, with one twist: the fleets don't sit still.
+Battleship for iOS, Android and the web, with one twist: the fleets don't sit still.
 
 After every shot you may manoeuvre **one** ship. Every manoeuvre makes a splash
 on your opponent's screen in the quadrant where the ship ended up, so they know
@@ -74,7 +74,9 @@ against easy and normal, and a genuine trade-off against hard.
 From the menu: **Theme** (system, light or dark), **Vibration** on or off, **Reduce
 motion** (system, on or off — drops the splash ripple; the reported quadrant stays marked),
 **Reset to defaults**, and an About card with the version and licence. The computer skill you pick on the menu is kept
-between launches. Nothing leaves your device: the app has no network code.
+between launches. Nothing leaves your device: the app has no network code. In a browser the
+Vibration row is drawn off and cannot be changed, and says why: a browser cannot vibrate for the
+game.
 
 ## Saved games
 
@@ -179,16 +181,78 @@ npx expo start
 Scan the QR code with **Expo Go** on iOS or Android, or press `i` / `a` to open
 a simulator / emulator.
 
-Web is not a target platform and has no dependencies in the project, but it is
-the only way to *see* the UI without a simulator, which is how several layout and
-copy defects were caught. Install the web renderer without saving it, then start:
+In a browser, with the development server:
 
 ```bash
-npm install --no-save react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
 npm run web
 ```
 
-Haptics are inert there.
+### Deploy
+
+The game is also a website: the same app, drawn by react-native-web, played entirely in the
+browser. Nothing moves to a server — the host only hands out the files and the headers around
+them, and the game makes no request once it has loaded (its policy says `connect-src 'none'`).
+
+```bash
+npm run build:web                                   # the site, for the root of a domain
+node scripts/build-web.mjs --base /battleshiple     # the site, served under /battleshiple/
+```
+
+Both write `dist-web/`, which is the whole site and the only folder to publish: the bundle, the
+page (`public/index.html` with the policy written in), the safety net (`guard.js`), the
+stylesheet, the not-found page, `robots.txt`, `.well-known/security.txt`, and each host's
+configuration. Never publish the repository itself.
+
+| Host | Reads |
+| --- | --- |
+| Netlify, Cloudflare Pages | `_headers` and `_redirects`, from the published folder |
+| Apache | `.htaccess`, from the published folder |
+| nginx | `deploy/nginx.conf`, included from the `http {}` block |
+| GitHub Pages | nothing: see below |
+
+The three configurations carry the same values, and `__tests__/website.test.ts` fails when one
+of them drifts:
+
+| Header | Value, and why |
+| --- | --- |
+| Content-Security-Policy | `default-src 'none'`, then only what the game was measured to load in Chromium: its own scripts, its own stylesheet plus the empty `<style>` element react-native-web fills (allowed by the empty string's hash, not `'unsafe-inline'`), its own favicon; no connections, no forms, no plugins, no `<base>`, no framing (`frame-ancestors 'none'`), and Trusted Types, so nothing writes HTML from a string |
+| X-Frame-Options | `DENY`, the same refusal to be framed for browsers that predate `frame-ancestors` |
+| X-Content-Type-Options | `nosniff` |
+| Referrer-Policy | `strict-origin-when-cross-origin`: the game's one address carries nothing private |
+| Permissions-Policy | every feature off: the game uses none |
+| Cross-Origin-Opener-Policy, Cross-Origin-Resource-Policy | `same-origin` |
+| Strict-Transport-Security | a year, subdomains included (HTTPS hosts) |
+| Cache-Control | a year, immutable, for the bundle (its name carries a hash of its contents); `no-cache` for everything else |
+
+The hosts also refuse the files that are not part of the site (their own configurations,
+`metadata.json`, and the repository's files should a checkout ever be published by mistake),
+answer a missing address and a folder with the game's own not-found page, turn off listings and
+server tokens, and redirect HTTP to HTTPS (Apache, nginx).
+
+**GitHub Pages** sends no headers of its own. The pages carry the Content-Security-Policy and the
+referrer policy as `<meta>` tags, so the game is held to the same policy there, but a `<meta>`
+cannot refuse framing, and nothing else in the table above reaches the browser: no
+`X-Frame-Options`, no `nosniff`, no Permissions-Policy, no cross-origin headers, and no cache
+rules or HSTS of the site's own. Publish `dist-web/` through GitHub
+Actions' Pages artifact rather than a branch: a branch build runs Jekyll, which leaves out
+`_expo/`, where the bundle lives. A Pages project site is served under `/<repository>/`, so build
+it with `--base /battleshiple`.
+
+**One origin per app.** Every project site an account publishes on GitHub Pages shares one
+origin, `<account>.github.io`, and browser storage is per origin: a script injected into any
+other app there can read and rewrite this game's save and settings, and the reverse. The game's
+keys are prefixed (`battleshiple:savegame:v1`, `battleshiple.settings.v1`) and everything read
+back is validated before use, but a prefix is not a boundary. Give the game a domain or
+subdomain of its own (a custom domain on Pages, or any of the hosts above), which gives it an
+origin of its own.
+
+If the bundle fails to load, or throws before it has drawn anything, the page says the game
+could not start and offers a reload, rather than showing a blank page; with JavaScript off it
+says the game needs it.
+
+Before a launch: build with the base the site is served under; check the headers with
+`curl -I https://<host>/` against the table above; and renew `.well-known/security.txt` before
+its `Expires` date (the unit tests fail once it has passed).
 
 ### Native builds
 
@@ -208,12 +272,23 @@ npm run typecheck          # TypeScript
 npm test                   # Jest (engine unit tests + UI smoke tests)
 npm run test:conventions   # the conventions shared with the sibling repositories
 npm run check              # all of the above: the gate before a push
+npm run test:e2e           # the website, built under /battleshiple/ and played in Chromium
+npm run test:all           # npm test, then the website
 npm run sim                # the balance simulation behind the numbers above
 ```
 
-CI runs the same steps one at a time, then bundles the app for Android and iOS
-with `expo export`; a separate job runs `npm audit --omit=dev --audit-level=high`
-against the lockfile.
+`npm run test:e2e` builds the site, serves it under a sub-path with the headers `_headers`
+writes, and plays it in Chromium: the menu, the settings, a battle against the computer, a
+reload that resumes it, the winning shot, the Pass & Play handoff. It fails on any policy
+violation, page error, console error or request outside the site, and also checks every
+response's headers, that the policy is enforced rather than only sent, the not-found page, the
+repository's files refused, framing refused, the page with no headers at all (as GitHub Pages
+serves it) and the safety net. It needs Chromium for Playwright (`npx playwright install
+chromium`).
+
+CI runs the same steps one at a time, then bundles the app for Android, iOS and the web with
+`expo export` and runs the website suite; a separate job runs
+`npm audit --omit=dev --audit-level=high` against the lockfile.
 
 ### Seeing the UI
 
@@ -221,12 +296,9 @@ There is no simulator in most automated environments, so `tools/screenshots.js`
 drives the web build in Chromium. Each run covers three phone sizes (390x844,
 360x640, 430x932) in light and dark, with and without reduced motion, and reaches
 the game-over screen by resuming a planted near-finished save. It seeds
-`Math.random`, so runs are repeatable, and fails on any console error. Neither
-Playwright nor the web renderer is a repo dependency, to keep CI from pulling
-browser binaries.
+`Math.random`, so runs are repeatable, and fails on any console error.
 
 ```bash
-npm install --no-save playwright react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
 npx expo export --platform web --output-dir /tmp/web
 (cd /tmp/web && python3 -m http.server 8099 &)
 node tools/screenshots.js /tmp/shots              # full matrix
@@ -269,6 +341,18 @@ src/ui/theme/            palettes, type scale, contrast checks, ThemeProvider
 src/ui/                  React Native components and screens
 tools/                   simulation, screenshots, icon generator, PNG diff
 __tests__/               Jest suites
+app.config.js            app.json, plus the base path a website build asks for
+public/                  the website around the bundle, copied into every export
+  index.html             the page template: the safety net first, no inline script or style
+  guard.js               the note shown when the game cannot start
+  site.css               the page's own styles, in the game's palettes
+  404.html               the not-found page
+  _headers, _redirects   headers and refusals for Netlify and Cloudflare Pages
+  .htaccess              the same for Apache
+  robots.txt, .well-known/security.txt
+deploy/nginx.conf        the same for nginx
+scripts/build-web.mjs    builds the website into dist-web/
+e2e/                     the website suite: a test host that reads _headers, and the run
 ```
 
 The engine is deliberately free of React and of any Expo import, so the rules

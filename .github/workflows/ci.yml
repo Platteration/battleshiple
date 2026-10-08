@@ -44,10 +44,16 @@ jobs:
 
       - run: npm run test:conventions
 
-      # Both platforms the app ships to: Jest never runs Metro, so a module that
-      # fails to resolve, or a platform-specific import, only shows here. No web:
-      # react-native-web is not a dependency.
-      - run: npx expo export --platform android --platform ios --output-dir /tmp/export
+      # Every platform the app ships to, the website included: Jest never runs
+      # Metro, so a module that fails to resolve, or a platform-specific import,
+      # only shows here.
+      - run: npx expo export --platform android --platform ios --platform web --output-dir /tmp/export
+
+      # The website end to end: built under a sub-path, served with the headers
+      # public/_headers writes, and played in Chromium under its own policy.
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
 
   # Its own job, so that an advisory published against an unchanged tree turns audit red
   # on the next run (on the default branch, the weekly one at the latest) and leaves check

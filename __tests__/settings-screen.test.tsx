@@ -1,13 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
-import { Alert, Linking, Text } from 'react-native';
+import { Alert, Linking, Platform, Text } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { SOURCE_URL } from '../src/about';
 import { SettingsProvider } from '../src/settings';
 import { STORAGE_KEYS } from '../src/storage';
 import { feedback } from '../src/ui/feedback';
-import { SETTINGS_ROWS, SettingsScreen } from '../src/ui/screens/SettingsScreen';
+import { SETTINGS_ROWS, SettingsScreen, WEB_VIBRATION_HINT } from '../src/ui/screens/SettingsScreen';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -108,6 +108,43 @@ describe('SettingsScreen', () => {
     act(() => toggle.props.onValueChange(true));
     await flush();
     expect((await stored()).haptics).toBe(true);
+  });
+
+  test('in a browser the Vibration switch is off and cannot be pressed, and the row says why', async () => {
+    // feedback.ts sends nothing to the haptics engine on the web, so a live
+    // switch there would be a control that does nothing. On a device the row is
+    // what it always was.
+    const device = renderer.root.find((n) => n.props.accessibilityLabel === 'Vibration' && typeof n.props.onValueChange === 'function');
+    expect(device.props.disabled).toBeFalsy();
+    expect(device.props.value).toBe(true);
+    findByText(renderer.root, 'A buzz for shots');
+    expect(() => findByText(renderer.root, WEB_VIBRATION_HINT)).toThrow();
+
+    const os = jest.replaceProperty(Platform, 'OS', 'web');
+    let web: ReactTestRenderer | undefined;
+    try {
+      await act(async () => {
+        web = create(
+          <SettingsProvider>
+            <SettingsScreen onBack={onBack} />
+          </SettingsProvider>,
+        );
+      });
+      await flush();
+      const shown: ReactTestRenderer | undefined = web;
+      if (!shown) throw new Error('the web render did not happen');
+      const toggle = shown.root.find((n) => n.props.accessibilityLabel === 'Vibration' && typeof n.props.onValueChange === 'function');
+      expect(toggle.props.disabled).toBe(true);
+      expect(toggle.props.value).toBe(false);
+      findByText(shown.root, WEB_VIBRATION_HINT);
+      expect(() => findByText(shown.root, 'A buzz for shots')).toThrow();
+      // Drawing it off writes nothing: the stored choice is the phone app's.
+      expect(await AsyncStorage.getItem(STORAGE_KEYS.settings)).toBeNull();
+    } finally {
+      const rendered = web;
+      if (rendered) act(() => rendered.unmount());
+      os.restore();
+    }
   });
 
   test('Reduce motion is three-state and stored', async () => {

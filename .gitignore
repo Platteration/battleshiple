@@ -41,6 +41,8 @@ yarn-error.*
 # tools/pngkit.py is imported by the icon generator and the PNG diff
 __pycache__/
 *.pyc
+# the website, as scripts/build-web.mjs writes it
+dist-web/
 
 # editors
 .vscode/

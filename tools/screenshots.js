@@ -11,9 +11,7 @@
  * because the layout has a compact mode for small phones and two palettes,
  * and a bug in either is invisible from a single configuration.
  *
- * Usage:
- *   # Neither is a repo dependency: CI stays lean and web is not a target.
- *   npm install --no-save playwright react-native-web@~0.21.0 react-dom@19.2.3 @expo/metro-runtime@~57.0.15
+ * Usage (Playwright and the web renderer come with `npm ci`):
  *   npx expo export --platform web --output-dir /tmp/web
  *   (cd /tmp/web && python3 -m http.server 8099 &)
  *   node tools/screenshots.js /tmp/shots            # full matrix

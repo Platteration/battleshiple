@@ -64,7 +64,10 @@ const manifestsUnder = (dir: string): string[] => {
   return out;
 };
 
-/** The app's own code: everything under src/ that is not a test, plus the entry files. */
+/**
+ * The app's own code: everything under src/ that is not a test, plus the entry files and the
+ * website's safety net (public/guard.js), which the web build loads before the bundle.
+ */
 const appSource = (): string => {
   const sources: string[] = [];
   const walk = (dir: string) => {
@@ -78,7 +81,7 @@ const appSource = (): string => {
     }
   };
   walk(path.join(root, 'src'));
-  for (const file of ['App.tsx', 'index.ts']) sources.push(fs.readFileSync(path.join(root, file), 'utf8'));
+  for (const file of ['App.tsx', 'index.ts', 'public/guard.js']) sources.push(fs.readFileSync(path.join(root, file), 'utf8'));
   return sources.join('\n');
 };
 

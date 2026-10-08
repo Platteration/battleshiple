@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import React from 'react';
-import { Linking, Switch, Text, View } from 'react-native';
+import { Linking, Platform, Switch, Text, View } from 'react-native';
 import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../../about';
 import { confirmAction } from '../../confirm';
 import { ReduceMotionSetting, ThemeSetting, useSettings } from '../../settings';
@@ -8,6 +8,14 @@ import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { Segmented } from '../components/Segmented';
 import { makeStyles, radius, spacing, useTheme } from '../theme';
+
+/**
+ * What the Vibration row says in a browser. src/ui/feedback.ts sends nothing to the haptics
+ * engine on the web, so there the switch would change a stored value and nothing else: it is
+ * drawn off and cannot be pressed, and the hint says where vibration is. The stored choice is
+ * left alone for the phone app.
+ */
+export const WEB_VIBRATION_HINT = 'A browser cannot vibrate for the game; vibration is in the iOS and Android apps.';
 
 /** The rows, in order, as the contract test pins them. */
 export const SETTINGS_ROWS = ['Theme', 'Vibration', 'Reduce motion', 'Reset to defaults', 'About'] as const;
@@ -32,6 +40,7 @@ export function SettingsScreen({ onBack }: Props) {
   const { settings, update, reset } = useSettings();
   const styles = useStyles();
   const { palette: p } = useTheme();
+  const web = Platform.OS === 'web';
 
   const onReset = () =>
     // Confirmed because a reset cannot be undone from inside the app; it
@@ -57,11 +66,12 @@ export function SettingsScreen({ onBack }: Props) {
         <View style={styles.row}>
           <View style={styles.rowText}>
             <Text style={styles.label}>Vibration</Text>
-            <Text style={styles.hint}>A buzz for shots, hits and manoeuvres.</Text>
+            <Text style={styles.hint}>{web ? WEB_VIBRATION_HINT : 'A buzz for shots, hits and manoeuvres.'}</Text>
           </View>
           <Switch
             accessibilityLabel="Vibration"
-            value={settings.haptics}
+            value={web ? false : settings.haptics}
+            disabled={web}
             onValueChange={(on) => update({ haptics: on })}
             trackColor={{ false: p.control.trackOff, true: p.control.trackOn }}
             thumbColor={p.control.thumb}

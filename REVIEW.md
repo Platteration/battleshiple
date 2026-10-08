@@ -20,6 +20,8 @@ An independent reviewer then read each commit and tried to find what was wrong w
 
 Repository hardening applied here as well: every GitHub Action is pinned to a commit rather than a floating tag, each workflow declares a least-privilege `permissions` block, and a Dependabot config, a licence and a security policy are in place.
 
+**Website (2026-10-08).** The web build is now a website as well as a test surface: react-native-web, react-dom and @expo/metro-runtime are dependencies (the Upgrades row "`npm run web` cannot work" is done), CI exports the web bundle and runs `npm run test:e2e`, which plays the built site in Chromium under its own measured Content-Security-Policy, and the hosting files (`public/_headers`, `public/_redirects`, `public/.htaccess`, `deploy/nginx.conf`, the not-found page, `robots.txt`, `security.txt`) and the safety net ship with it. README's Deploy section says what each host enforces and what GitHub Pages cannot.
+
 The rest of this document is the review as written. Fixed items are left in place so the reasoning behind each change stays with it.
 
 ## Summary

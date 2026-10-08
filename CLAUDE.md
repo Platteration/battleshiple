@@ -44,10 +44,17 @@ the layout.
   the renderer reads of them and dropped, not refused, when they do not hold up
   (`dropUnreadable`): a save without them is one every screen already draws.
 - A write the store refuses is never silent. `src/storage.ts` keeps each refused
-  write by key and writes it again after the next write the store accepts, while
-  it is still the newest asked of its key (on the web a write lands when it is
-  called, so an older value must not overwrite a newer one); `clearGame` goes
-  through the same path, so a finished battle is never written back.
+  write by key, with what the store held when it refused, and tries it again
+  (`retryRefused`) after the next write the store accepts, on the web's `storage`
+  event (another page on the origin changed the store, which is how room comes
+  back there) and on every `AppState` change (hidden or shown), listening only
+  while something is refused. It writes a value back only while it is still the
+  newest asked of its key here *and* the store still holds what it held at the
+  refusal: on the web a write lands when it is called, and every tab of the game
+  shares the store but not this module's memory, so a battle refused in one tab
+  was written back over a newer one another tab had saved. One another tab has
+  overwritten is let go and no longer reported. `clearGame` goes through the same
+  path, so a finished battle is never written back.
   `StorageNoteFrame` (`src/ui/components/StorageNote.tsx`, around every screen in
   `App.tsx`) says so across the bottom of the window while any write is refused,
   and its height is `BottomReserve`, which `useScreenInsets` in `src/ui/layout.ts`
@@ -126,19 +133,32 @@ rules, the not-found page, refusing every file that is not part of the site. `np
 bundle (SDK 57 copies it whole, `.well-known/` and `.htaccess` included) and reads
 `public/index.html` as the page template; then it removes `metadata.json`, moves 404.html's and
 .htaccess's root-absolute addresses under `--base` when there is one (the bundle's go through
-`app.config.js`'s `WEB_BASE_URL` → `experiments.baseUrl`), writes the policy into the built page as
-a `<meta>` taken from `public/_headers`, and refuses a page that is not the template. The policy is
+`app.config.js`'s `WEB_BASE_URL` → `experiments.baseUrl`), keeps only the configuration the
+`--host` reads from the folder (`HOSTS`: `_headers` and `_redirects` for Netlify, `_headers` for
+Cloudflare Pages, `.htaccess` for Apache, none for nginx or GitHub Pages, which serves every file it
+is given; all three without `--host`), writes the policy into the built page as a `<meta>` taken
+from `public/_headers`, and refuses a page that is not the template. Inside the checkout it writes
+only to `dist-web` or `dist` (`OUT_FOLDERS`), the folders `.gitignore` and the shared
+`eslint.config.js` both ignore. The policy is
 not in the template because `expo start --web` serves it too, and the dev server needs a WebSocket
 and its overlay's `innerHTML`; `npm run web` was checked by hand to draw the game with the template.
 
 One policy, written in four places — `public/_headers` (Netlify, Cloudflare Pages),
 `public/.htaccess` (Apache), `deploy/nginx.conf`, and the `<meta>` in `public/404.html` and the
 built index.html (less frame-ancestors) — and `__tests__/website.test.ts` holds them identical on
-every path of the site, pins the directive list, the hosts' refusals (their own configs,
-`metadata.json`, dotfiles but `/.well-known/`, the repository's files), the not-found handling,
-security.txt's expiry (the suite fails once it lapses: renew it a year at a time), the template's
-lack of inline script and style, and `site.css`'s colours against the palettes at WCAG AA; it
-also drives `build-web.mjs` in a sandbox with a stand-in exporter. Every value was measured in
+every path of the site, pins the directive list, the hosts' refusals (their own configs and
+`metadata.json` on all three, which is all a published folder can hold that is not the site, and
+dotfiles but `/.well-known/` on Apache and nginx), the not-found handling, security.txt's expiry
+(the suite fails once it lapses: renew it a year at a time), the template's lack of inline script
+and style, `guard.js` parsed as ES5, and `site.css`'s colours against the palettes at WCAG AA; it
+also drives `build-web.mjs` in a sandbox with a stand-in exporter. Netlify and Apache read their
+rules from the published folder, so in a checkout published by mistake (their files then sit in
+`public/`) no rule of theirs fires; nginx's configuration lives outside the folder and is an
+allow-list of the site's paths (`location = /`, one regular expression, and `location /` answering
+404), so the test runs every file `git ls-files` lists through it and requires a 404 for each. Its
+`listen 443 ssl http2` is the form nginx 1.22 and 1.24 load (`http2 on;` is 1.25.1 and later), and
+Apache's `.htaccess` needs `AllowOverride All` and leaves `ServerTokens Prod` to the server
+configuration, which README and the file's header both say and the test holds. Every value was measured in
 Chromium with the policy sent as a response header: without `img-src 'self'` the favicon is
 refused; without the empty string's hash in `style-src` react-native-web's `<style>` element is
 refused and the game draws unstyled (it fills that element through `insertRule`, which CSP does
@@ -154,9 +174,14 @@ probes that the policy is enforced (HTML from a string, a fetch, an outside imag
 script are each refused by the directive meant to refuse them), with headers and with the `<meta>`
 alone, frames the game from a second loopback origin, fills the origin's storage as another app on
 it would (the note shows, the board and action bar stay above it, and the refused battle and
-settings are written once there is room), plants the repository's files beside the site, and
-stages the safety net (`public/guard.js`, loaded first and synchronously: a bundle that 404s, one
-that throws, one that draws nothing within four seconds of load; and `<noscript>`).
+settings are written once there is room: with the next move, and with no move at all when another
+page frees it), opens two tabs of the game on that storage (a battle refused in the first is not
+written back over the newer one the second saved), checks every file of the real build is either
+served by the hosts and by nginx's allow-list or the one host's configuration (`npm run test:e2e`
+builds `--host netlify`), plants what else a published folder can hold (`metadata.json`,
+`.htaccess`) beside the site, and stages the safety net (`public/guard.js`, ES5 so the old
+browsers it is for can parse it, loaded first and synchronously: a bundle that 404s, one that
+throws, one that draws nothing within four seconds of load; and `<noscript>`).
 `appConfig.test.ts`'s no-network scan reads `guard.js` as well. Playwright is a devDependency
 pinned to the version whose Chromium CI installs.
 

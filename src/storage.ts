@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import {
   AI_PROFILES,
   Difficulty,
@@ -45,24 +46,37 @@ export async function loadJSON(key: string): Promise<unknown> {
 }
 
 /**
- * Writes the store refused, by key: the write's number and what the key should
- * now hold (null for removed). A refused write never interrupts play, but it is
+ * Writes the store refused, by key: the write's number, what the key should now
+ * hold (null for removed), and what the store held when it refused – what the
+ * value would have replaced. A refused write never interrupts play, but it is
  * never silent either. On the web the store is the origin's localStorage, and a
  * GitHub Pages project site shares that origin, and its few megabytes, with
  * every other app the account publishes: once one of them has filled it, every
  * save here throws. Swallowing that let a battle be played to its last turn with
  * nothing written and nothing said, and a reload then offered nothing to resume.
  * So a refused write is kept here, `StorageNoteFrame` says so across the bottom
- * of every screen while any is, and each is written again after the next write
- * the store accepts, which is how saving resumes by itself once there is room.
- * A phone whose disk is full refuses the same way.
+ * of every screen while any is, and each is tried again (`retryRefused`) after
+ * the next write the store accepts, whenever another page on the origin changes
+ * the store (which is how room comes back there), and whenever the app or page
+ * is hidden or shown again. That is how saving resumes by itself once there is
+ * room. A phone whose disk is full refuses the same way.
+ *
+ * The store is shared, and this module's memory is not: every tab of the game
+ * has its own. So a refused value is written back only while the store still
+ * holds what it held when the value was refused. A battle another tab saved
+ * since is newer than the one refused here, and is left where it is: replaying
+ * the refused one over it deleted the newer battle with nothing said.
  */
-const refused = new Map<string, { id: number; value: string | null }>();
-/** The newest write asked of each key, so that a refused value is only retried while nothing newer was asked. */
+const refused = new Map<string, { id: number; value: string | null; over: string | null | undefined }>();
+/** The newest write asked of each key here, so that a refused value is only retried while nothing newer was asked. */
 const newest = new Map<string, number>();
 let writes = 0;
 let catchingUp = false;
+/** A retry asked for while one was running: the running one goes round again. */
+let again = false;
 const listeners = new Set<() => void>();
+/** Stops listening for room once nothing is refused; null while not listening. */
+let unwatch: (() => void) | null = null;
 
 /** True while the store has refused the latest write of any record. */
 export function storageRefused(): boolean {
@@ -77,6 +91,38 @@ export function onStorageRefusedChange(listener: () => void): () => void {
   };
 }
 
+/** Tells the listeners when the refused set has grown or emptied, and listens for room only while it is not empty. */
+function refusedChanged(before: number): void {
+  if (refused.size === before) return;
+  for (const listener of listeners) listener();
+  if (refused.size > 0 && !unwatch) {
+    const app = AppState.addEventListener('change', retryRefused);
+    // On the web: another page on the origin – another app on a shared GitHub
+    // Pages address, or another tab of this one – changed the store, and may
+    // have made room. A page's own changes raise no storage event in it. React
+    // Native's global `window` has no addEventListener.
+    const page = typeof window !== 'undefined' && typeof window.addEventListener === 'function' ? window : null;
+    page?.addEventListener('storage', retryRefused);
+    unwatch = () => {
+      // react-native-web hands back no subscription where there is no document.
+      app?.remove();
+      page?.removeEventListener('storage', retryRefused);
+    };
+  } else if (refused.size === 0 && unwatch) {
+    unwatch();
+    unwatch = null;
+  }
+}
+
+/** What the store holds under `key` now, or undefined when it cannot be read. */
+async function stored(key: string): Promise<string | null | undefined> {
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return undefined;
+  }
+}
+
 async function write(key: string, value: string | null): Promise<boolean> {
   const id = ++writes;
   newest.set(key, id);
@@ -87,29 +133,56 @@ async function write(key: string, value: string | null): Promise<boolean> {
   } catch {
     ok = false;
   }
+  // What the refused value would have replaced: it is written back only while the store still holds this.
+  const over = ok ? undefined : await stored(key);
   const before = refused.size;
   if (ok) refused.delete(key);
   // A write that failed after a newer one to the same key was asked has nothing
   // left to retry: the newer one is what the key should hold, and it reports for itself.
-  else if (newest.get(key) === id) refused.set(key, { id, value });
-  if (refused.size !== before) for (const listener of listeners) listener();
-  if (ok && refused.size > 0) void catchUp();
+  else if (newest.get(key) === id) refused.set(key, { id, value, over });
+  refusedChanged(before);
+  if (ok && refused.size > 0) retryRefused();
   return ok;
 }
 
 /**
- * There is room again: write what was refused, each record once, and only while
- * the refused value is still the newest one asked of its key. On the web a write
- * takes effect when it is called, so a value refused earlier must not land over
- * one written since.
+ * Write what the store refused again, each record once: after a write the store
+ * accepted, when another page on the origin changed the store, and when the app
+ * or page is hidden or shown. A record is written only while its refused value
+ * is still the newest one asked of its key, here and in the store: on the web a
+ * write takes effect when it is called, so a value refused earlier must not land
+ * over one written since, by this page or by another tab. One that another tab
+ * has overwritten is let go – the store holds the newer value – and is no longer
+ * reported as refused.
  */
+function retryRefused(): void {
+  if (catchingUp) again = true;
+  else void catchUp();
+}
+
 async function catchUp(): Promise<void> {
-  if (catchingUp) return;
   catchingUp = true;
   try {
-    for (const [key, entry] of [...refused]) {
-      if (newest.get(key) === entry.id) await write(key, entry.value);
-    }
+    do {
+      again = false;
+      for (const [key, entry] of [...refused]) {
+        if (newest.get(key) !== entry.id) continue;
+        const now = await stored(key);
+        // A newer write to the key was asked here while it was being read: that one reports for itself.
+        if (newest.get(key) !== entry.id) continue;
+        // The store cannot be read now: the record stays refused, and said, for the next try.
+        if (now === undefined) continue;
+        // Another tab wrote the key after the refusal. Unknown when the store could not be read
+        // then: with nothing to say another tab wrote, the value is this one's to write back.
+        if (entry.over !== undefined && now !== entry.over) {
+          const before = refused.size;
+          refused.delete(key);
+          refusedChanged(before);
+          continue;
+        }
+        await write(key, entry.value);
+      }
+    } while (again);
   } finally {
     catchingUp = false;
   }
@@ -186,7 +259,7 @@ export async function saveGame(state: GameState, difficulty: Difficulty): Promis
   const trimmed = state.log.length > MAX_LOG ? { ...state, log: state.log.slice(-MAX_LOG) } : state;
   const payload: SavedGame = { version: 1, savedAt: Date.now(), difficulty, state: trimmed };
   // A failed autosave never interrupts play; `storageRefused()` says so instead,
-  // and the save is written again once the store accepts a write.
+  // and the save is written again once there is room (`retryRefused`).
   await write(KEY, JSON.stringify(payload));
 }
 

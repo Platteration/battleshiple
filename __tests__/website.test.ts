@@ -10,6 +10,7 @@
  */
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
+import { Linter } from 'eslint';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -93,8 +94,14 @@ const asMeta = (policy: string) =>
 const BUNDLE = '/_expo/static/js/web/index-0123456789abcdef0123456789abcdef.js';
 /** Every path the site is made of, as the browser asks for it. */
 const SITE_PATHS = ['/', '/index.html', '/404.html', '/guard.js', '/site.css', '/favicon.ico', '/robots.txt', '/.well-known/security.txt', BUNDLE];
-/** What a host must refuse: its own configurations, and the repository's files beside the site. */
-const REFUSED = ['/_headers', '/_redirects', '/.htaccess', '/.git/config', '/.git/HEAD', '/.env', '/metadata.json', '/README.md', '/package.json', '/deploy/nginx.conf', '/src/storage.ts'];
+/**
+ * What every host must refuse: the files the published folder can hold that are not part of the
+ * site, which are the hosts' own configurations and the exporter's metadata.json. Netlify and
+ * Apache read their rules from inside that folder, so a rule naming anything else (a repository's
+ * README, say) could only fire in a folder no build writes: in a checkout published by mistake
+ * their configurations sit in public/, where no host reads them.
+ */
+const REFUSED = ['/_headers', '/_redirects', '/.htaccess', '/metadata.json'];
 
 /** Measured in Chromium with the game played end to end under each one (see public/_headers). */
 const POLICY = [
@@ -143,8 +150,16 @@ describe('the response headers', () => {
     expect(headers['Cross-Origin-Opener-Policy']).toBe('same-origin');
     expect(headers['Cross-Origin-Resource-Policy']).toBe('same-origin');
     expect(headers['Strict-Transport-Security']).toBe('max-age=31536000; includeSubDomains');
-    // Apache sends HSTS over HTTPS alone, where a browser reads it.
-    expect(HTACCESS).toMatch(/^\s*Header always set Strict-Transport-Security "[^"]+" env=HTTPS$/m);
+  });
+
+  it('are sent on every Apache response, on no condition, as the other two hosts send them', () => {
+    // `env=HTTPS` on Strict-Transport-Security kept it from every response behind a proxy that
+    // ends TLS, which is the deployment the redirect rule reads X-Forwarded-Proto for. A browser
+    // ignores the header over plain HTTP, so the condition bought nothing.
+    const lines = HTACCESS.split('\n').filter((l) => /^\s*Header\b/.test(l));
+    // The eight headers every path gets, and Cache-Control in each arm of its <If>.
+    expect(lines.length).toBe(10);
+    for (const line of lines) expect(line).toMatch(/^\s*Header always set \S+ "[^"]*"$/);
   });
 
   it('keep the hashed bundle a year, and revalidate everything else', () => {
@@ -234,10 +249,18 @@ describe('the Content-Security-Policy', () => {
   });
 });
 
-describe("what the hosts refuse: the repository's own files and the hosts' configurations", () => {
-  /** nginx: every `location ~ <regex> { return 404; }`, tried against the path. */
-  const nginxRefuses = (p: string) =>
-    [...NGINX.matchAll(/^\s*location ~ (\S+) \{ return 404; \}$/gm)].some((m) => new RegExp(m[1]!).test(p)); // the group is required
+describe("what the hosts refuse: the hosts' configurations, metadata.json, and for nginx everything not the site", () => {
+  /**
+   * nginx answers a path from the folder only through the locations that serve: `location = /`
+   * and the one regular expression of the site's paths. Everything else falls to `location /`,
+   * which answers 404. The test below holds the file to exactly those three locations, so this
+   * reader is the whole of what nginx would do.
+   */
+  const nginxServes = (p: string) =>
+    (p === '/' && /^\s*location = \/ \{\s*try_files \/index\.html =404;\s*\}/m.test(NGINX)) ||
+    [...NGINX.matchAll(/^\s*location ~ (\S+) \{\s*try_files \$uri =404;\s*\}/gm)].some((m) => new RegExp(m[1]!).test(p)) || // the group is required
+    !/^\s*location \/ \{\s*return 404;\s*\}/m.test(NGINX);
+  const nginxRefuses = (p: string) => !nginxServes(p);
   /** Apache: every `RewriteRule <regex> - [R=404,L]` with no condition before it, against the path less its slash. */
   const apacheRefuses = (p: string) => {
     const lines = HTACCESS.split('\n');
@@ -261,12 +284,59 @@ describe("what the hosts refuse: the repository's own files and the hosts' confi
     expect([nginxRefuses(p), apacheRefuses(p), netlifyRefuses(p)]).toEqual([false, false, false]);
   });
 
+  it.each(['/.git/config', '/.env', '/.DS_Store'])('the dotfile %s is refused by nginx and Apache', (p) => {
+    expect([nginxRefuses(p), apacheRefuses(p)]).toEqual([true, true]);
+  });
+
+  it('nginx serves security.txt alone out of /.well-known/', () => {
+    expect(['/.well-known/', '/.well-known/other.txt', '/.well-known/security.txt'].map(nginxServes)).toEqual([false, false, true]);
+  });
+
+  it('name, on Netlify and Apache, only files the published folder can hold', () => {
+    // A rule for anything else can never fire: these two read their rules from the folder itself.
+    const canHold = new Set(['_headers', '_redirects', '.htaccess', 'metadata.json']);
+    const netlify = REDIRECTS.split('\n')
+      .filter((l) => l.trim() && !l.trimStart().startsWith('#'))
+      .map((l) => l.trim().split(/\s+/)[0]!.slice(1)); // a rule line has a from
+    expect(netlify.filter((f) => !canHold.has(f))).toEqual([]);
+    const named = /^\s*RewriteRule \^\(([^)]*)\)\$ - \[R=404,L\]$/m.exec(HTACCESS)?.[1]?.split('|') ?? [];
+    expect(named.map((n) => n.replace(/\\\./g, '.')).filter((f) => !canHold.has(f))).toEqual([]);
+    expect(named.length).toBeGreaterThan(0);
+  });
+
+  it('nginx answers 404 for every file of a checkout published by mistake, read as nginx reads its locations', () => {
+    // nginx reads its configuration from outside the folder it serves, so this one is not lost
+    // when that folder is the wrong one. The checkout's own file list, plus what a working copy
+    // holds that git does not list.
+    const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
+    expect(tracked.length).toBeGreaterThan(100);
+    const checkout = [...tracked, '.git/config', '.git/HEAD', '.env', '.env.local', 'node_modules/expo/package.json', 'dist-web/index.html'].map((f) => `/${f}`);
+    expect(checkout.filter(nginxServes)).toEqual([]);
+    // A checkout has no index.html at its root, so even the address of the page is a 404 there.
+    expect(fs.existsSync(path.join(root, 'index.html'))).toBe(false);
+  });
+
+  it('nginx has the three locations the reader above reads, and no other', () => {
+    expect(NGINX.match(/^\s*location\b.*$/gm)).toEqual([
+      '  location = / {',
+      expect.stringMatching(/^ {2}location ~ \^\/\(.+\)\$ \{$/),
+      '  location / {',
+    ]);
+    expect(NGINX).toMatch(/^\s*location \/ \{\s*return 404;\s*\}/m);
+  });
+
+  it('nginx loads on the nginx current distributions ship, which predates `http2 on;`', () => {
+    // Ubuntu 24.04's nginx 1.24 refuses the whole file over an unknown `http2` directive.
+    expect(NGINX).not.toMatch(/^\s*http2\b/m);
+    expect(NGINX.match(/^\s*listen .*443.*;$/gm)).toEqual(['  listen 443 ssl http2;', '  listen [::]:443 ssl http2;']);
+  });
+
   it('answer a missing page, and a folder, with the site’s own not-found page', () => {
     expect(NGINX).toMatch(/^\s*error_page 404 \/404\.html;$/m);
     expect(NGINX).toMatch(/^\s*error_page 403 =404 \/404\.html;$/m);
-    expect(NGINX).toMatch(/^\s*location = \/404\.html \{ internal; \}$/m);
     expect(NGINX).toMatch(/^\s*autoindex off;$/m);
-    expect(NGINX).toMatch(/^\s*server_tokens off;$/m);
+    // Every server block, the redirect's included, names no version.
+    expect(NGINX.split(/^server \{$/m).slice(1).map((block) => /^\s*server_tokens off;$/m.test(block))).toEqual([true, true]);
     expect(NGINX).toMatch(/^\s*return 301 https:\/\/\$host\$request_uri;$/m);
     expect(HTACCESS).toMatch(/^ErrorDocument 404 \/404\.html\nErrorDocument 403 \/404\.html$/m);
     expect(HTACCESS).toMatch(/^Options -Indexes$/m);
@@ -292,6 +362,34 @@ describe('the files a site carries', () => {
     const left = Date.parse(fields.Expires ?? '') - Date.now(); // its presence is checked just above
     expect(left).toBeGreaterThan(0); // renew it: a year from the day it is written
     expect(left).toBeLessThanOrEqual(366 * 24 * 3600 * 1000);
+  });
+
+  it('says what Apache needs of the server configuration, where a deployer reads it', () => {
+    // Under Debian's and Ubuntu's AllowOverride None the whole file is silently ignored, and
+    // ServerTokens is the server configuration's: .htaccess cannot set it.
+    for (const [file, text] of [['public/.htaccess', HTACCESS], ['README.md', read('README.md')]] as const) {
+      expect([file, text.includes('AllowOverride All'), text.includes('ServerTokens Prod')]).toEqual([file, true, true]);
+    }
+    expect(HTACCESS).not.toMatch(/^\s*ServerTokens\b/m);
+  });
+
+  it('writes the safety net in ES5, using nothing in the page newer than IE 9 has', () => {
+    // A browser too old for the game is one the safety net is for, and one that cannot parse it
+    // shows neither the note nor the game: Safari 9 refuses `const` in strict code, and IE 10
+    // has no `hidden` property. The repository's own lint asks for const, so guard.js turns
+    // no-var off for itself.
+    const es5: Linter.Config[] = [
+      {
+        languageOptions: { ecmaVersion: 5, sourceType: 'script' },
+        linterOptions: { reportUnusedDisableDirectives: 'off' },
+        rules: { 'no-restricted-properties': ['error', { property: 'hidden' }, { property: 'classList' }] },
+      },
+    ];
+    const problems = (source: string) => new Linter().verify(source, es5, 'guard.js').map((m) => `${m.line}:${m.column} ${m.message}`);
+    expect(problems(read('public/guard.js'))).toEqual([]);
+    // The check reads what it claims to.
+    expect(problems("(function () { 'use strict'; const a = 1; })();")).toEqual([expect.stringMatching(/^1:\d+ Parsing error: The keyword 'const' is reserved$/)]);
+    expect(problems('note.hidden = false;')).toHaveLength(1);
   });
 
   it('lets robots read the one page', () => {
@@ -438,8 +536,12 @@ describe('the build', () => {
     ['--out', 'public'],
     ['--out', '.'],
     ['--out', '..'],
+    // Ignored by git and not by the shared ESLint configuration, so `npm run lint` read the bundle.
+    ['--out', 'web-build'],
     ['--base', '/../x'],
     ['--base', 'battleshiple'],
+    ['--host', 'vercel'],
+    ['--host', 'constructor'],
     ['--bogus', 'x'],
   ])('refuses %s %s before the exporter runs', (flag, value) => {
     const box = sandbox();
@@ -481,6 +583,39 @@ describe('the build', () => {
       expect(policyAt).toBeGreaterThan(markup.indexOf('<meta charset="utf-8" />'));
       expect(policyAt).toBeLessThan(markup.indexOf('<script'));
       expect(policyAt).toBeLessThan(markup.indexOf('<link'));
+    } finally {
+      box.done();
+    }
+  });
+
+  it('writes inside the checkout only to a folder that git and the lint both ignore', () => {
+    const folders = /export const OUT_FOLDERS = \[([^\]]*)\];/.exec(read('scripts/build-web.mjs'))?.[1]?.match(/'[^']+'/g)?.map((q) => q.slice(1, -1));
+    const linted = /ignores: \[([^\]]*)\]/.exec(read('eslint.config.js'))?.[1]?.match(/'[^']+'/g)?.map((q) => q.slice(1, -1)) ?? [];
+    const gitignored = read('.gitignore').split('\n').map((l) => l.trim());
+    expect(folders).toEqual(expect.arrayContaining(['dist-web']));
+    for (const folder of folders ?? []) {
+      expect([folder, gitignored.includes(`${folder}/`), linted.includes(`${folder}/**`)]).toEqual([folder, true, true]);
+    }
+  });
+
+  it.each([
+    ['github-pages', []],
+    ['netlify', ['_headers', '_redirects']],
+    ['cloudflare', ['_headers']],
+    ['apache', ['.htaccess']],
+    ['nginx', []],
+    ['no host named', ['_headers', '_redirects', '.htaccess']],
+  ])('a build for %s keeps the configuration that host reads from the folder, and no other', (host, kept) => {
+    // GitHub Pages serves every file it is given: a configuration it does not read is a file
+    // anyone can fetch there.
+    const box = sandbox();
+    try {
+      const hostArgs = host === 'no host named' ? [] : ['--host', host];
+      expect(box.run(...hostArgs, '--base', '/battleshiple')).toEqual({ status: 0, stderr: '' });
+      const out = path.join(box.repo, 'dist-web');
+      expect(['_headers', '_redirects', '.htaccess'].filter((f) => fs.existsSync(path.join(out, f)))).toEqual(kept);
+      for (const f of ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt']) expect([f, fs.existsSync(path.join(out, f))]).toEqual([f, true]);
+      if (kept.includes('.htaccess')) expect(fs.readFileSync(path.join(out, '.htaccess'), 'utf8')).toMatch(/^ErrorDocument 404 \/battleshiple\/404\.html$/m);
     } finally {
       box.done();
     }

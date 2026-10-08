@@ -159,6 +159,26 @@ describe('GameScreen', () => {
     expect(byLabel(root, 'E5')).toHaveLength(1);
   });
 
+  // In Pass & Play the second seat's strip reads its own report line on its own turn.
+  test("the second seat's report line that does not hold up still draws, through the validator", async () => {
+    const g = endTurn(fire(createGame({ mode: 'local', names: ['A', 'B'], fleets: [fleet(), fleet()] }), { r: 0, c: 4 }).state);
+    expect(texts(render(g, 1))).toContain('A fired at E1 and hit your Carrier!');
+    act(() => renderer.unmount());
+
+    await saveGame(g, 'normal');
+    const payload = JSON.parse((await AsyncStorage.getItem(SAVE_KEY)) as string);
+    payload.state.players[1].lastIncoming.classId = 'frigate';
+    await AsyncStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    const loaded = await loadGame();
+    expect(loaded).not.toBeNull();
+
+    const root = render(loaded!.state, 1);
+    // The strip falls back to the log's own line for the shot; the report's line about the hull is gone.
+    expect(texts(root).some((t) => /hit your/.test(t))).toBe(false);
+    expect(texts(root)).toContain('A fired at E1: hit!');
+    expect(byLabel(root, 'E5')).toHaveLength(1);
+  });
+
   // The storage note is drawn over the bottom of the window while the store
   // refuses to save; its height comes out of the board, never out of the action bar.
   test('the height kept clear for the storage note comes out of the board', () => {

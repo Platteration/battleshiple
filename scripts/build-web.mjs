@@ -1,6 +1,12 @@
 // Builds the website: the folder this writes is the whole site, and the only thing to publish.
 //
-//   node scripts/build-web.mjs [--base /battleshiple] [--out dist-web]
+//   node scripts/build-web.mjs [--host netlify] [--base /battleshiple] [--out dist-web]
+//
+// --host is the host the folder is going to: github-pages, netlify, cloudflare, apache or nginx.
+// The build keeps the configuration that host reads from the folder and no other (HOSTS below),
+// so the others are not published as files where nothing refuses them: GitHub Pages serves every
+// file it is given, the configurations included. Without --host all three stay, and each host
+// ignores the others'.
 //
 // It runs `expo export --platform web`, which copies public/ (the page template, the safety net,
 // the stylesheet, the not-found page, robots.txt, security.txt and the hosts' configurations)
@@ -13,7 +19,8 @@
 //     sends no headers of its own. The template does not carry it, because `expo start --web`
 //     serves the template too and the development server needs a WebSocket and HTML written
 //     from strings, both of which the policy refuses;
-//   - removes metadata.json, the exporter's manifest for EAS Update, which the site never loads;
+//   - removes metadata.json, the exporter's manifest for EAS Update, which the site never loads,
+//     and the configurations the --host does not read;
 //   - refuses to finish when the page is not the one public/index.html describes (a later SDK
 //     that stopped reading the template would ship a page with no policy and no safety net).
 import { spawnSync } from 'node:child_process';
@@ -28,11 +35,31 @@ const require = createRequire(path.join(root, 'package.json'));
 /** One or more path segments, none of them `.` or `..`: the rule app.config.js applies. */
 export const BASE = /^(\/(?!\.\.?(?:\/|$))[A-Za-z0-9._~-]+)+$/;
 
-/** The folders inside the checkout the site may be written to; .gitignore lists each one. */
-export const OUT_FOLDERS = ['dist-web', 'dist', 'web-build'];
+/**
+ * The folders inside the checkout the site may be written to: .gitignore and eslint.config.js
+ * ignore each one, so neither git nor the lint reads the minified bundle. (Not `web-build`, which
+ * .gitignore lists and the shared ESLint configuration does not.)
+ */
+export const OUT_FOLDERS = ['dist-web', 'dist'];
 
-/** Every file the site is made of besides the bundle and the favicon. */
-export const SITE_FILES = ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt', '_headers', '_redirects', '.htaccess'];
+/** Every file the site is made of besides the bundle and the favicon, whichever host it is for. */
+export const SITE_FILES = ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt'];
+
+/** The hosts' configurations public/ holds, each read from the published folder by its host. */
+export const HOST_FILES = ['_headers', '_redirects', '.htaccess'];
+
+/**
+ * What each host reads from the published folder. nginx reads deploy/nginx.conf, from outside it,
+ * and GitHub Pages reads nothing (the pages carry the policy as a <meta>). Cloudflare Pages reads
+ * _headers, and does not apply a 404 rule, which is all _redirects holds.
+ */
+export const HOSTS = {
+  'github-pages': [],
+  netlify: ['_headers', '_redirects'],
+  cloudflare: ['_headers'],
+  apache: ['.htaccess'],
+  nginx: [],
+};
 
 /** The Content-Security-Policy the `/*` rule of a _headers file gives every path. */
 export function headerPolicy(headersText) {
@@ -101,23 +128,31 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const args = { base: '', out: 'dist-web' };
+  const args = { base: '', out: 'dist-web', host: '' };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = argv[i + 1];
-    if ((flag === '--base' || flag === '--out') && value !== undefined) {
+    if ((flag === '--base' || flag === '--out' || flag === '--host') && value !== undefined) {
       args[flag.slice(2)] = value;
       i += 1;
     } else {
-      fail(`unknown argument ${JSON.stringify(flag)}; usage: node scripts/build-web.mjs [--base /path] [--out dir]`);
+      fail(`unknown argument ${JSON.stringify(flag)}; usage: node scripts/build-web.mjs [--host ${Object.keys(HOSTS).join('|')}] [--base /path] [--out dir]`);
     }
   }
   return args;
 }
 
+/** The configurations a build for `host` keeps: all of them when no host is named. */
+export function hostFiles(host) {
+  if (!host) return HOST_FILES;
+  if (!Object.hasOwn(HOSTS, host)) throw new Error(`--host is one of ${Object.keys(HOSTS).join(', ')}, not ${JSON.stringify(host)}`);
+  return HOSTS[host];
+}
+
 /** Runs the exporter, then turns its output into the site; returns the folder it wrote. */
-function build({ base, out: outArg }) {
+function build({ base, out: outArg, host }) {
   if (base && !BASE.test(base)) throw new Error(`--base must be a path such as /battleshiple, not ${JSON.stringify(base)}`);
+  const keep = hostFiles(host);
   const out = outputFolder(root, outArg);
 
   const env = { ...process.env, CI: '1', EXPO_NO_TELEMETRY: '1' };
@@ -131,8 +166,9 @@ function build({ base, out: outArg }) {
   if (run.status !== 0) throw new Error(`expo export exited with ${run.status}`);
 
   fs.rmSync(path.join(out, 'metadata.json'), { force: true });
-  for (const file of SITE_FILES) if (!fs.existsSync(path.join(out, file))) throw new Error(`the site has no ${file}`);
-  for (const file of ['404.html', '.htaccess']) {
+  for (const file of [...SITE_FILES, ...HOST_FILES]) if (!fs.existsSync(path.join(out, file))) throw new Error(`the site has no ${file}`);
+  for (const file of HOST_FILES) if (!keep.includes(file)) fs.rmSync(path.join(out, file));
+  for (const file of ['404.html', ...(keep.includes('.htaccess') ? ['.htaccess'] : [])]) {
     const target = path.join(out, file);
     fs.writeFileSync(target, withBase(file, fs.readFileSync(target, 'utf8'), base));
   }
@@ -152,7 +188,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const args = parseArgs(process.argv.slice(2));
   try {
     const out = build(args);
-    console.log(`build-web: the site is ${path.relative(root, out) || out}${args.base ? `, served under ${args.base}/` : ''}`);
+    console.log(`build-web: the site is ${path.relative(root, out) || out}${args.base ? `, served under ${args.base}/` : ''}${args.host ? `, for ${args.host}` : ''}`);
   } catch (error) {
     fail(error.message);
   }

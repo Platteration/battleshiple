@@ -8,15 +8,18 @@
 // rules, the settings (the browser's Vibration row, a theme, Reset's confirmation, About and its
 // source link), a battle against the computer (deploy, fire, manoeuvre, the computer's reply), a
 // reload that resumes it, the winning shot and the after-action report, a browser whose storage
-// another app on the origin has filled (the game says so, and catches up once there is room), and
-// the Pass & Play handoff. Then what the host does around the game: the headers off every
-// response, the policy enforced rather than only sent, the not-found page, the repository's own
-// files refused, framing refused, the page as GitHub Pages serves it (no headers, the <meta>
-// alone), and the safety net: a bundle that does not load, one that throws, one that draws
-// nothing, and no JavaScript at all.
+// another app on the origin has filled (the game says so, and catches up once there is room: with
+// the next move, or with no move at all when another page frees it), two tabs of the game sharing
+// that storage (a battle refused in one never lands over a newer one the other saved), and the
+// Pass & Play handoff. Then what the host does around the game: the headers off every response,
+// the policy enforced rather than only sent, the not-found page, every file of the build either
+// part of the site (and served by nginx's allow-list) or the one host's configuration, the files
+// a published folder can hold refused, framing refused, the page as GitHub Pages serves it (no
+// headers, the <meta> alone), and the safety net: a bundle that does not load, one that throws,
+// one that draws nothing, and no JavaScript at all.
 //
-//   npm run test:e2e        builds the site, then runs this
-//   node e2e/run.mjs        runs this against the dist-web/ already built
+//   npm run test:e2e        builds the site for Netlify, then runs this
+//   node e2e/run.mjs        runs this against the dist-web/ already built (--host netlify)
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -46,7 +49,7 @@ const SAVE_KEY = 'battleshiple:savegame:v1';
 const SETTINGS_KEY = 'battleshiple.settings.v1';
 const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo.version;
 /** How long after load public/guard.js gives the game to draw before it says it could not start. */
-const GRACE_MS = Number(/const GRACE_MS = (\d+);/.exec(fs.readFileSync(path.join(root, 'public', 'guard.js'), 'utf8'))?.[1]);
+const GRACE_MS = Number(/var GRACE_MS = (\d+);/.exec(fs.readFileSync(path.join(root, 'public', 'guard.js'), 'utf8'))?.[1]);
 assert.ok(GRACE_MS > 0, 'public/guard.js states its GRACE_MS');
 
 // Playwright is a devDependency. Missing, this fails rather than skips: a skipped browser suite
@@ -137,6 +140,39 @@ const press = (page, name) => button(page, name).click();
 /** A board cell by its coordinate, whatever its label says after it ("E5" or "E5, miss"). */
 const cell = (page, coord) => page.getByLabel(new RegExp(`^${coord}(,|$)`)).first();
 const stored = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), key);
+/** The cells player 0 has fired at in the battle stored in the page's origin, as [row, column]. */
+const storedShots = async (page) => (await stored(page, SAVE_KEY))?.state?.players?.[0]?.shots?.map((s) => [s.r, s.c]);
+
+/**
+ * Another app on the origin fills its localStorage, as one on a shared GitHub Pages address can:
+ * every write the game makes then throws. Run in a page; returns how much it stored.
+ */
+function fillStorage() {
+  let size = 1 << 22;
+  let total = 0;
+  for (let n = 0; size >= 1; ) {
+    try {
+      localStorage.setItem(`another-app.${n}`, 'x'.repeat(size));
+      total += size;
+      n += 1;
+    } catch {
+      size = Math.floor(size / 2);
+    }
+  }
+  return total;
+}
+/** ...and removes its records again. Run in a page. */
+function freeStorage() {
+  for (const key of Object.keys(localStorage)) if (key.startsWith('another-app.')) localStorage.removeItem(key);
+}
+
+/** A battle against the computer, started from the menu with a random fleet. */
+async function startBattle(page) {
+  await press(page, 'Play vs Computer');
+  await press(page, 'Random');
+  await press(page, 'Start battle');
+  await button(page, 'Choose a target in enemy waters').waitFor();
+}
 
 /** The background colour of the screen behind the top-left corner, as rgb(). */
 const screenColour = (page) =>
@@ -368,20 +404,7 @@ try {
       const full = await watched(fullContext, 'full storage');
       await full.goto(site.url);
       await button(full, 'Play vs Computer').waitFor();
-      const filled = await full.evaluate(() => {
-        let size = 1 << 22;
-        let total = 0;
-        for (let n = 0; size >= 1; ) {
-          try {
-            localStorage.setItem(`another-app.${n}`, 'x'.repeat(size));
-            total += size;
-            n += 1;
-          } catch {
-            size = Math.floor(size / 2);
-          }
-        }
-        return total;
-      });
+      const filled = await full.evaluate(fillStorage);
       assert.ok(filled > 1_000_000, `the other app filled the origin's storage (${filled} characters)`);
       const note = full.getByTestId('storage-note');
 
@@ -409,9 +432,7 @@ try {
 
       // Room again: the other app's records go. The next move is saved, the settings chosen
       // while the storage was full with it, and the note goes.
-      await full.evaluate(() => {
-        for (const key of Object.keys(localStorage)) if (key.startsWith('another-app.')) localStorage.removeItem(key);
-      });
+      await full.evaluate(freeStorage);
       await cell(full, 'E5').click();
       await press(full, 'FIRE at E5');
       await note.waitFor({ state: 'detached' });
@@ -419,6 +440,88 @@ try {
       assert.equal((await stored(full, SETTINGS_KEY))?.theme, 'dark');
     } finally {
       await fullContext.close();
+    }
+  });
+
+  await step('saving resumes by itself when another page on the origin makes room, with no move of the player’s', async () => {
+    // A player who has quit to the menu makes no further write, and the battle used to wait for
+    // one: still unsaved ten seconds after the room came back, and gone with the page.
+    const roomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await roomContext.addInitScript(seeded, 20261008);
+    try {
+      const game = await watched(roomContext, 'room comes back');
+      await game.goto(site.url);
+      await button(game, 'Play vs Computer').waitFor();
+      await game.evaluate(fillStorage);
+      await startBattle(game);
+      await cell(game, 'E5').click();
+      await press(game, 'FIRE at E5');
+      const note = game.getByTestId('storage-note');
+      await note.waitFor();
+      await press(game, 'Quit to menu');
+      await button(game, 'Resume game').waitFor();
+      assert.equal(await stored(game, SAVE_KEY), null, 'nothing was saved');
+
+      // The other app, in a page of its own on the origin, removes its records. The player does
+      // nothing. (Any page of the origin will do for it; this one names its favicon, which a
+      // text file would have the browser fetch from the origin's root, outside the site.)
+      const other = await roomContext.newPage();
+      await other.goto(`${site.url}404.html`);
+      await other.evaluate(freeStorage);
+      await note.waitFor({ state: 'detached' });
+      assert.deepEqual(await storedShots(game), [[4, 4]], 'the battle was saved as it was left');
+      await other.close();
+      await game.reload();
+      await button(game, 'Resume game').waitFor();
+    } finally {
+      await roomContext.close();
+    }
+  });
+
+  await step('a battle the browser refused is never written back over a newer one another tab saved', async () => {
+    // Two tabs of the game share one localStorage and nothing else. The first is refused a battle;
+    // room comes back; the second saves a newer battle. Writing the first tab's refused battle
+    // back once it could deleted the newer one, with nothing said.
+    const tabsContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await tabsContext.addInitScript(seeded, 20261008);
+    try {
+      const first = await watched(tabsContext, 'first tab');
+      await first.goto(site.url);
+      await button(first, 'Play vs Computer').waitFor();
+      await first.evaluate(fillStorage);
+      await startBattle(first);
+      await cell(first, 'A1').click();
+      await press(first, 'FIRE at A1');
+      const note = first.getByTestId('storage-note');
+      await note.waitFor();
+      await press(first, 'Quit to menu');
+      await button(first, 'Resume game').waitFor();
+      // Room comes back where this tab does not hear of it: it frees the room itself, and a
+      // page's own change raises no storage event in it.
+      await first.evaluate(freeStorage);
+      assert.equal(await stored(first, SAVE_KEY), null, 'nothing has written the refused battle yet');
+
+      const second = await watched(tabsContext, 'second tab');
+      await second.goto(site.url);
+      await button(second, 'Play vs Computer').waitFor();
+      assert.equal(await stored(second, SAVE_KEY), null, 'still nothing, as the second tab opens');
+      await startBattle(second);
+      // The first tab hears the second one's save, finds a battle in the store newer than the one
+      // it was refused, and leaves it there: nothing of its own is waiting any more.
+      await note.waitFor({ state: 'detached' });
+      assert.deepEqual(await storedShots(second), [], 'the store holds the second tab’s battle, not the refused one');
+      await cell(second, 'J10').click();
+      await press(second, 'FIRE at J10');
+      await second.waitForFunction((key) => JSON.parse(localStorage.getItem(key) ?? 'null')?.state?.players?.[0]?.shots?.length === 1, SAVE_KEY);
+      await second.close();
+
+      // A settings change in the first tab is accepted, and was the write that brought the stale battle back.
+      await press(first, 'Settings');
+      await first.getByRole('radio', { name: 'Dark' }).click();
+      await first.waitForFunction((key) => JSON.parse(localStorage.getItem(key) ?? '{}').theme === 'dark', SETTINGS_KEY);
+      assert.deepEqual(await storedShots(first), [[9, 9]], 'the newer battle is still the one stored');
+    } finally {
+      await tabsContext.close();
     }
   });
 
@@ -472,19 +575,38 @@ try {
     await lost.close();
   });
 
-  await step("the repository's own files and the hosts' configurations answer the not-found page", async () => {
-    // A copy of the site with what a mistaken upload of the checkout would add beside it.
+  await step('every file the build wrote is part of the site, or the configuration of the one host it was built for', async () => {
+    // npm run test:e2e builds for Netlify, which reads _headers and _redirects from the folder.
+    const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+    const files = walk(SITE).map((f) => path.relative(SITE, f).split(path.sep).join('/'));
+    const configs = ['_headers', '_redirects'];
+    assert.deepEqual(files.filter((f) => ['_headers', '_redirects', '.htaccess', 'metadata.json'].includes(f)).sort(), configs, 'the build keeps the configuration Netlify reads, and no other');
+    // nginx answers the site's paths through `location = /` and one regular expression, and every
+    // other path with 404; a file a later build adds fails here until that expression serves it.
+    const nginx = fs.readFileSync(path.join(root, 'deploy', 'nginx.conf'), 'utf8');
+    const served = new RegExp(/^\s*location ~ (\S+) \{\s*try_files \$uri =404;/m.exec(nginx)[1]);
+    for (const file of files) {
+      const response = await fetch(`${site.url}${file}`);
+      const answer = configs.includes(file) ? 404 : 200;
+      assert.equal(response.status, answer, `${file} answers ${answer}`);
+      assert.equal(served.test(`/${file}`), answer === 200, `nginx ${answer === 200 ? 'serves' : 'refuses'} /${file}`);
+    }
+  });
+
+  await step('the files a published folder can hold that are not part of the site answer the not-found page', async () => {
+    // A copy of the site with what else such a folder can hold: metadata.json, which a plain
+    // `npx expo export` writes and the build removes, and Apache's .htaccess, which a build with
+    // no --host keeps. The repository's own files are never in a folder the build writes, and in
+    // a checkout published by mistake no host reads _redirects or .htaccess from public/; nginx's
+    // allow-list, read from outside the folder, is what refuses those (__tests__/website.test.ts).
     const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'battleshiple-site-'));
     try {
       fs.cpSync(SITE, copy, { recursive: true });
-      const planted = ['README.md', 'metadata.json', '.git/config', '.git/HEAD', 'deploy/nginx.conf', '.env', 'package.json', 'src/storage.ts'];
-      for (const file of planted) {
-        fs.mkdirSync(path.dirname(path.join(copy, file)), { recursive: true });
-        fs.writeFileSync(path.join(copy, file), 'not part of the site');
-      }
+      const planted = ['metadata.json', '.htaccess'];
+      for (const file of planted) fs.writeFileSync(path.join(copy, file), 'not part of the site');
       const host = await serveSite({ root: copy, base: BASE });
       try {
-        for (const file of [...planted, '_headers', '_redirects', '.htaccess']) {
+        for (const file of [...planted, '_headers', '_redirects']) {
           const response = await fetch(`${host.url}${file}`);
           const body = await response.text();
           assert.equal(response.status, 404, `${file} is refused`);

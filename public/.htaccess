@@ -1,7 +1,14 @@
 # Battleshiple: Apache 2.4 settings for the site (mod_rewrite, mod_headers, mod_mime).
-# `npx expo export` copies this file from public/ into the published folder. Netlify and
-# Cloudflare Pages read _headers and _redirects instead; nginx: deploy/nginx.conf. The three
+# `npx expo export` copies this file from public/ into the published folder. Netlify reads
+# _headers and _redirects instead, Cloudflare Pages _headers; nginx: deploy/nginx.conf. The three
 # carry the same values; _headers says why each one is what it is.
+#
+# Apache reads this file only where the server configuration lets it: `AllowOverride All` for the
+# published folder. Debian and Ubuntu default to `AllowOverride None`, under which every line here
+# is silently ignored, and `AllowOverride FileInfo` alone answers every request with a 500, since
+# this file sets Options. The version in Apache's Server header is the server configuration's to
+# turn off (`ServerTokens Prod`): this file cannot. And it covers the folder it is in and nothing
+# else, so publish the folder the build writes, never the repository.
 
 Options -Indexes
 ServerSignature Off
@@ -23,10 +30,10 @@ ErrorDocument 403 /404.html
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !=https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-  # never serve a dotfile (.git and .env above all, and this file), except /.well-known/
+  # never serve a dotfile (this file above all), except /.well-known/
   RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
-  # the files in the folder that are not part of the site, and the repository's own
-  RewriteRule ^(_headers|_redirects|metadata\.json|README\.md|package\.json|deploy/.*|src/.*)$ - [R=404,L]
+  # the files in the folder that are not part of the site
+  RewriteRule ^(_headers|_redirects|metadata\.json)$ - [R=404,L]
   # a folder with no page of its own is a 404, not a 403 that hints at a listing
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteCond %{REQUEST_FILENAME}/index.html !-f
@@ -41,7 +48,9 @@ ErrorDocument 403 /404.html
   Header always set Permissions-Policy "accelerometer=(), attribution-reporting=(), autoplay=(), browsing-topics=(), camera=(), clipboard-read=(), clipboard-write=(), display-capture=(), encrypted-media=(), fullscreen=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), identity-credentials-get=(), idle-detection=(), join-ad-interest-group=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), otp-credentials=(), payment=(), picture-in-picture=(), private-aggregation=(), publickey-credentials-create=(), publickey-credentials-get=(), run-ad-auction=(), screen-wake-lock=(), serial=(), shared-storage=(), shared-storage-select-url=(), storage-access=(), usb=(), window-management=(), xr-spatial-tracking=()"
   Header always set Cross-Origin-Opener-Policy "same-origin"
   Header always set Cross-Origin-Resource-Policy "same-origin"
-  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+  # On every response, as the other two hosts send it: a browser ignores it over plain HTTP, and
+  # behind a proxy that ends TLS (the X-Forwarded-Proto case above) Apache never sees HTTPS set.
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
   # The bundle carries a hash of its contents in its name; nothing else does.
   <If "%{REQUEST_URI} =~ m#/_expo/static/#">
     Header always set Cache-Control "public, max-age=31536000, immutable"

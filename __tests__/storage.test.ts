@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { clearGame, loadGame, onStorageRefusedChange, saveGame, saveJSON, storageRefused } from '../src/storage';
 import { createGame, endTurn, fire, maneuver } from '../src/engine/game';
 import { makeShip } from '../src/engine/ships';
@@ -394,6 +395,26 @@ describe('storage', () => {
       expect(loaded.state.players[0].lastIncoming).toBeUndefined();
     });
 
+    // Pass & Play: the second seat's report strip reads the same field on its own
+    // turn, and a check that walked only the first seat passed every case above.
+    function secondSeatHit(): GameState {
+      const g = endTurn(fire(createGame({ mode: 'local', names: ['P1', 'P2'], fleets: [fleet(), fleet()] }), { r: 0, c: 4 }).state);
+      expect(g.current).toBe(1);
+      expect(g.players[1].lastIncoming).toEqual({ r: 0, c: 4, result: 'hit', turn: 0, classId: 'carrier', sunk: false });
+      return g;
+    }
+
+    test("the second seat's last incoming shot is kept as it was", async () => {
+      const g = secondSeatHit();
+      expect((await loadPlayed(g)).state.players[1].lastIncoming).toEqual(g.players[1].lastIncoming);
+    });
+
+    test.each(['frigate', 'constructor'])("the second seat's last incoming shot naming %s", async (name) => {
+      const loaded = await loadPlayed(secondSeatHit(), (p) => (p.state.players[1].lastIncoming.classId = name));
+      expect(loaded.state.players[1].lastIncoming).toBeUndefined();
+      expect(loaded.state.players[1].ships.find((s) => s.id === 'carrier')?.hits).toEqual([true, false, false, false, false]);
+    });
+
     // Your own manoeuvre this turn, still to be played out on the board.
     function movedThisTurn(): GameState {
       let g = fire(game(), { r: 9, c: 9 }).state;
@@ -549,6 +570,168 @@ describe('a write the store refuses is said, and written again once there is roo
     held.release();
     expect(await newer).toBe(true);
     expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'light' });
+    expect(storageRefused()).toBe(false);
+  });
+
+  // The store is shared by every tab of the game, and this module's memory is
+  // not: another tab writes straight to the store (`real`, here) and tells this
+  // one nothing. Reproduced in Chromium: a battle refused in one tab, a newer one
+  // saved in another, and a theme change in the first deleted the newer battle.
+  const saved = (g: GameState) => JSON.stringify({ version: 1, savedAt: Date.now(), difficulty: 'normal', state: g });
+  const shotsOf = async () => (await loadGame())!.state.players[0].shots.map((s) => [s.r, s.c]);
+
+  test('a refused battle is not written back over a newer one another tab saved', async () => {
+    full.add('*');
+    await saveGame(endTurn(fire(game(), { r: 0, c: 0 }).state), 'normal');
+    expect(storageRefused()).toBe(true);
+    full.clear();
+    await real(KEY, saved(endTurn(fire(game(), { r: 9, c: 9 }).state)));
+    // A settings change here is accepted, and is the write that used to bring the refused battle back.
+    expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(true);
+    await flush();
+    expect(await shotsOf()).toEqual([[9, 9]]);
+    // The store holds a battle newer than the refused one: nothing is waiting to be saved.
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('a refused settings change is not written back over one another tab saved', async () => {
+    full.add(SETTINGS);
+    expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(false);
+    full.clear();
+    await real(SETTINGS, JSON.stringify({ theme: 'light' }));
+    await saveGame(game(), 'normal');
+    await flush();
+    expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'light' });
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('a value refused after another tab wrote is the newest asked of the key, and is written back', async () => {
+    // The other tab's battle came first; this one was refused after it.
+    await real(KEY, saved(endTurn(fire(game(), { r: 9, c: 9 }).state)));
+    full.add('*');
+    await saveGame(endTurn(fire(game(), { r: 0, c: 0 }).state), 'normal');
+    full.clear();
+    await saveJSON(SETTINGS, { theme: 'dark' });
+    await flush();
+    expect(await shotsOf()).toEqual([[0, 0]]);
+    expect(storageRefused()).toBe(false);
+  });
+
+  // A native store can reject a read as well as a write. With nothing read, nothing says another
+  // tab wrote the key, and a refused value is neither dropped unsaid nor written blind.
+  test('a store that could not be read at the refusal still has the refused battle written back', async () => {
+    const read = AsyncStorage.getItem;
+    AsyncStorage.setItem = jest.fn(() => Promise.reject(new Error('QuotaExceededError')));
+    AsyncStorage.getItem = jest.fn(() => Promise.reject(new Error('database is locked')));
+    try {
+      await saveGame(endTurn(fire(game(), { r: 0, c: 0 }).state), 'normal');
+    } finally {
+      AsyncStorage.getItem = read;
+      AsyncStorage.setItem = jest.fn((key: string, value: string) => real(key, value));
+    }
+    expect(storageRefused()).toBe(true);
+    await saveJSON(SETTINGS, { theme: 'dark' });
+    await flush();
+    expect(await shotsOf()).toEqual([[0, 0]]);
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('a store that cannot be read at the retry keeps the battle refused, and said, for the next one', async () => {
+    full.add('*');
+    await saveGame(endTurn(fire(game(), { r: 0, c: 0 }).state), 'normal');
+    full.clear();
+    const read = AsyncStorage.getItem;
+    AsyncStorage.getItem = jest.fn(() => Promise.reject(new Error('database is locked')));
+    try {
+      await saveJSON(SETTINGS, { theme: 'dark' });
+      await flush();
+      expect(storageRefused()).toBe(true);
+    } finally {
+      AsyncStorage.getItem = read;
+    }
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
+    const [, changed] = jest.mocked(AppState.addEventListener).mock.calls.at(-1)!;
+    changed('active');
+    await flush();
+    expect(await shotsOf()).toEqual([[0, 0]]);
+    expect(storageRefused()).toBe(false);
+  });
+
+  // Room comes back without the game writing anything: another app on the
+  // origin removes its records, or the player frees space and comes back. A
+  // player who has quit to the menu makes no further write, and their battle
+  // used to wait for one that never came.
+  const refuseABattle = async () => {
+    full.add('*');
+    await saveGame(endTurn(fire(game(), { r: 0, c: 0 }).state), 'normal');
+    expect(storageRefused()).toBe(true);
+    full.clear();
+  };
+
+  test('the app going to the background or coming back writes what was refused, with no write of its own', async () => {
+    await refuseABattle();
+    const [, changed] = jest.mocked(AppState.addEventListener).mock.calls.at(-1)!; // subscribed when the battle was refused
+    changed('active');
+    await flush();
+    expect(await shotsOf()).toEqual([[0, 0]]);
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('so does another page on the origin changing the store, on the web', async () => {
+    // The test environment's window is React Native's global, with no addEventListener: it gets
+    // the two methods a page has.
+    const page = new EventTarget();
+    const win = window as unknown as Partial<Pick<EventTarget, 'addEventListener' | 'removeEventListener'>>;
+    const removed = jest.fn(page.removeEventListener.bind(page));
+    win.addEventListener = page.addEventListener.bind(page);
+    win.removeEventListener = removed;
+    try {
+      await refuseABattle();
+      page.dispatchEvent(new Event('storage'));
+      await flush();
+      expect(await shotsOf()).toEqual([[0, 0]]);
+      expect(storageRefused()).toBe(false);
+      // ...and stops listening once nothing is refused.
+      expect(removed).toHaveBeenCalledWith('storage', expect.any(Function));
+    } finally {
+      delete win.addEventListener;
+      delete win.removeEventListener;
+    }
+  });
+
+  test('a retry that finds the store still full keeps the battle refused, and listening', async () => {
+    await refuseABattle();
+    full.add('*');
+    const [, changed] = jest.mocked(AppState.addEventListener).mock.calls.at(-1)!;
+    changed('background');
+    await flush();
+    expect(storageRefused()).toBe(true);
+    full.clear();
+    changed('active');
+    await flush();
+    expect(await shotsOf()).toEqual([[0, 0]]);
+  });
+
+  test('a retry asked for while one is running is not dropped: the running one goes round again', async () => {
+    full.add('*');
+    expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(false);
+    await saveGame(game(), 'normal');
+    const battle = jest.mocked(AsyncStorage.setItem).mock.calls.filter(([key]) => key === KEY).at(-1)![1];
+    // The settings are still refused when the retry reaches them, and the battle's write is held open.
+    full.clear();
+    full.add(SETTINGS);
+    held = { value: battle, release: () => {} };
+    const [, changed] = jest.mocked(AppState.addEventListener).mock.calls.at(-1)!;
+    changed('active');
+    await flush();
+    expect(storageRefused()).toBe(true);
+    // Room for the settings comes back while the battle's write is still in flight.
+    full.clear();
+    changed('active');
+    held.release();
+    await flush();
+    await flush();
+    expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'dark' });
     expect(storageRefused()).toBe(false);
   });
 

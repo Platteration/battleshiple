@@ -203,21 +203,25 @@ browser. Nothing moves to a server — the host only hands out the files and the
 them, and the game makes no request once it has loaded (its policy says `connect-src 'none'`).
 
 ```bash
-npm run build:web                                   # the site, for the root of a domain
-node scripts/build-web.mjs --base /battleshiple     # the site, served under /battleshiple/
+npm run build:web -- --host netlify                                  # the site, for the root of a domain
+node scripts/build-web.mjs --host github-pages --base /battleshiple  # the site, served under /battleshiple/
 ```
 
 Both write `dist-web/`, which is the whole site and the only folder to publish: the bundle, the
 page (`public/index.html` with the policy written in), the safety net (`guard.js`), the
-stylesheet, the not-found page, `robots.txt`, `.well-known/security.txt`, and each host's
-configuration. Never publish the repository itself.
+stylesheet, the not-found page, `robots.txt`, `.well-known/security.txt`, and the configuration
+the host named by `--host` reads from the folder (`github-pages`, `netlify`, `cloudflare`,
+`apache` or `nginx`), and no other host's: GitHub Pages serves every file it is given, the
+configurations included. Without `--host` the folder carries all three. Never publish the
+repository itself.
 
-| Host | Reads |
-| --- | --- |
-| Netlify, Cloudflare Pages | `_headers` and `_redirects`, from the published folder |
-| Apache | `.htaccess`, from the published folder |
-| nginx | `deploy/nginx.conf`, included from the `http {}` block |
-| GitHub Pages | nothing: see below |
+| Host | `--host` | Reads |
+| --- | --- | --- |
+| Netlify | `netlify` | `_headers` and `_redirects`, from the published folder |
+| Cloudflare Pages | `cloudflare` | `_headers`, from the published folder (it does not apply the 404 rules `_redirects` holds) |
+| Apache | `apache` | `.htaccess`, from the published folder, where the server configuration allows it: see below |
+| nginx | `nginx` | `deploy/nginx.conf`, included from the `http {}` block |
+| GitHub Pages | `github-pages` | nothing: see below |
 
 The three configurations carry the same values, and `__tests__/website.test.ts` fails when one
 of them drifts:
@@ -233,10 +237,23 @@ of them drifts:
 | Strict-Transport-Security | a year, subdomains included (HTTPS hosts) |
 | Cache-Control | a year, immutable, for the bundle (its name carries a hash of its contents); `no-cache` for everything else |
 
-The hosts also refuse the files that are not part of the site (their own configurations,
-`metadata.json`, and the repository's files should a checkout ever be published by mistake),
-answer a missing address and a folder with the game's own not-found page, turn off listings and
-server tokens, and redirect HTTP to HTTPS (Apache, nginx).
+The hosts also refuse the files in the published folder that are not part of the site (the
+hosts' own configurations, and the `metadata.json` a plain `npx expo export` writes), answer a
+missing address and a folder with the game's own not-found page, turn off listings, and redirect
+HTTP to HTTPS (Apache, nginx). Netlify and Apache read their rules from the published folder, so
+those rules cover that folder and nothing else; nginx reads its configuration from outside it and
+answers only the site's own paths, so on nginx alone a checkout published by mistake answers 404
+for every file in it. nginx also names no version in its `Server` header (`server_tokens off`).
+
+**Apache** reads `.htaccess` only where the server configuration lets it: give the published
+folder `AllowOverride All`. Debian and Ubuntu default to `AllowOverride None`, under which every
+header and refusal in the file is silently ignored, and `AllowOverride FileInfo` alone answers
+every request with a 500, since the file sets `Options`. The version in Apache's `Server` header
+is the server configuration's to turn off, with `ServerTokens Prod`: `.htaccess` cannot.
+
+**nginx**: `deploy/nginx.conf` listens with `listen 443 ssl http2`, which every nginx a current
+distribution ships loads (the `http2 on;` directive needs 1.25.1; Ubuntu 24.04 has 1.24). From
+1.25.1 `nginx -t` warns that this form is deprecated, and loads it.
 
 **GitHub Pages** sends no headers of its own. The pages carry the Content-Security-Policy and the
 referrer policy as `<meta>` tags, so the game is held to the same policy there, but a `<meta>`
@@ -245,7 +262,8 @@ cannot refuse framing, and nothing else in the table above reaches the browser: 
 rules or HSTS of the site's own. Publish `dist-web/` through GitHub
 Actions' Pages artifact rather than a branch: a branch build runs Jekyll, which leaves out
 `_expo/`, where the bundle lives. A Pages project site is served under `/<repository>/`, so build
-it with `--base /battleshiple`.
+it with `--host github-pages --base /battleshiple`, which leaves the other hosts' configurations
+out of the artifact.
 
 **One origin per app.** Every project site an account publishes on GitHub Pages shares one
 origin, `<account>.github.io`, and browser storage is per origin: a script injected into any
@@ -253,7 +271,11 @@ other app there can read and rewrite this game's save and settings, and the reve
 keys are prefixed (`battleshiple:savegame:v1`, `battleshiple.settings.v1`) and everything read
 back is validated before use, but a prefix is not a boundary. The origin's storage is one
 allowance, too (about 5 MB in Chromium): another app there that fills it stops this game saving,
-which the game then says under every screen until there is room again. Give the game a domain or
+which the game then says under every screen until there is room again. It tries again when the
+next move is saved, when another page on the origin changes the storage (which is how room comes
+back there), and when the page is hidden or shown, so a battle left on the menu is saved once the
+other app makes room. Two tabs of the game share the one save: a battle refused in one tab is not
+written back over a newer one the other tab saved since. Give the game a domain or
 subdomain of its own (a custom domain on Pages, or any of the hosts above), which gives it an
 origin of its own.
 
@@ -288,14 +310,16 @@ npm run test:all           # npm test, then the website
 npm run sim                # the balance simulation behind the numbers above
 ```
 
-`npm run test:e2e` builds the site, serves it under a sub-path with the headers `_headers`
-writes, and plays it in Chromium: the menu, the settings, a battle against the computer, a
-reload that resumes it, the winning shot, a browser whose storage another app has filled (the
-game says so and catches up once there is room), the Pass & Play handoff. It fails on any policy
-violation, page error, console error or request outside the site, and also checks every
-response's headers, that the policy is enforced rather than only sent, the not-found page, the
-repository's files refused, framing refused, the page with no headers at all (as GitHub Pages
-serves it) and the safety net. It needs Chromium for Playwright (`npx playwright install
+`npm run test:e2e` builds the site for Netlify, serves it under a sub-path with the headers
+`_headers` writes, and plays it in Chromium: the menu, the settings, a battle against the
+computer, a reload that resumes it, the winning shot, a browser whose storage another app has
+filled (the game says so and catches up once there is room, with the next move or with none when
+another page frees it), two tabs sharing that storage, the Pass & Play handoff. It fails on any
+policy violation, page error, console error or request outside the site, and also checks every
+response's headers, that the policy is enforced rather than only sent, the not-found page, that
+every file the build wrote is part of the site (and served by nginx's allow-list) or Netlify's
+configuration, the files a published folder can hold refused, framing refused, the page with no
+headers at all (as GitHub Pages serves it) and the safety net. It needs Chromium for Playwright (`npx playwright install
 chromium`).
 
 CI runs the same steps one at a time, then bundles the app for Android, iOS and the web with

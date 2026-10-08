@@ -37,7 +37,23 @@ the layout.
   invariants (one computer, in seat 1, in a vs-Computer match; no winner;
   neither fleet sunk), each checked against real play before it was added; a
   combination the renderer survives is left accepted, since refusing it would
-  refuse a later build's legitimate save for no failure prevented.
+  refuse a later build's legitimate save for no failure prevented. Two fields
+  only the screens read, and only for show — a player's `lastIncoming` (the
+  report strip indexes `SHIP_CLASSES` with its class) and a log entry's `move`
+  (the board plays your own manoeuvre out from its poses) — are checked for what
+  the renderer reads of them and dropped, not refused, when they do not hold up
+  (`dropUnreadable`): a save without them is one every screen already draws.
+- A write the store refuses is never silent. `src/storage.ts` keeps each refused
+  write by key and writes it again after the next write the store accepts, while
+  it is still the newest asked of its key (on the web a write lands when it is
+  called, so an older value must not overwrite a newer one); `clearGame` goes
+  through the same path, so a finished battle is never written back.
+  `StorageNoteFrame` (`src/ui/components/StorageNote.tsx`, around every screen in
+  `App.tsx`) says so across the bottom of the window while any write is refused,
+  and its height is `BottomReserve`, which `useScreenInsets` in `src/ui/layout.ts`
+  adds to the bottom inset that `Screen` pads by and the game board is sized
+  from. On GitHub Pages the origin's storage is shared with every app the account
+  publishes, and one that filled it stopped this game saving with nothing said.
 - Exact versioned Expo docs: https://docs.expo.dev/versions/v57.0.0/
 
 ## Native configuration
@@ -136,9 +152,11 @@ which answers with `_headers` and `_redirects` as Netlify reads them, and fails 
 report, page or console error, or request outside the sub-path while it plays the game. It also
 probes that the policy is enforced (HTML from a string, a fetch, an outside image and an inline
 script are each refused by the directive meant to refuse them), with headers and with the `<meta>`
-alone, frames the game from a second loopback origin, plants the repository's files beside the
-site, and stages the safety net (`public/guard.js`, loaded first and synchronously: a bundle that
-404s, one that throws, one that draws nothing within four seconds of load; and `<noscript>`).
+alone, frames the game from a second loopback origin, fills the origin's storage as another app on
+it would (the note shows, the board and action bar stay above it, and the refused battle and
+settings are written once there is room), plants the repository's files beside the site, and
+stages the safety net (`public/guard.js`, loaded first and synchronously: a bundle that 404s, one
+that throws, one that draws nothing within four seconds of load; and `<noscript>`).
 `appConfig.test.ts`'s no-network scan reads `guard.js` as well. Playwright is a devDependency
 pinned to the version whose Chromium CI installs.
 

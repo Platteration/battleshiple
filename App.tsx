@@ -26,6 +26,7 @@ import { confirmAction } from './src/confirm';
 import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
 import { ErrorBoundary } from './src/ui/components/ErrorBoundary';
 import { FadeIn } from './src/ui/components/FadeIn';
+import { StorageNoteFrame } from './src/ui/components/StorageNote';
 import { ThemeProvider, useTheme } from './src/ui/theme';
 import { feedback } from './src/ui/feedback';
 import { OPPONENTS } from './src/ui/opponents';
@@ -467,10 +468,13 @@ function Game() {
 
   // Each screen fades in as it is entered, and the one it replaces is gone at
   // once: a fade out would leave one player's board showing over the handoff.
+  // The storage note sits outside them all, so it stays put as they change.
   const screenKey = screen.name === 'handoff' || screen.name === 'setup' ? `${screen.name}:${screen.player}` : screen.name;
   return (
-    <ErrorBoundary onReset={recoverToHome}>
-      <FadeIn key={screenKey}>{content}</FadeIn>
-    </ErrorBoundary>
+    <StorageNoteFrame>
+      <ErrorBoundary onReset={recoverToHome}>
+        <FadeIn key={screenKey}>{content}</FadeIn>
+      </ErrorBoundary>
+    </StorageNoteFrame>
   );
 }

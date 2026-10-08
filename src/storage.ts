@@ -44,14 +44,86 @@ export async function loadJSON(key: string): Promise<unknown> {
   }
 }
 
-/** True when the write reached the store. Persistence is best-effort and never interrupts play. */
-export async function saveJSON(key: string, value: unknown): Promise<boolean> {
+/**
+ * Writes the store refused, by key: the write's number and what the key should
+ * now hold (null for removed). A refused write never interrupts play, but it is
+ * never silent either. On the web the store is the origin's localStorage, and a
+ * GitHub Pages project site shares that origin, and its few megabytes, with
+ * every other app the account publishes: once one of them has filled it, every
+ * save here throws. Swallowing that let a battle be played to its last turn with
+ * nothing written and nothing said, and a reload then offered nothing to resume.
+ * So a refused write is kept here, `StorageNoteFrame` says so across the bottom
+ * of every screen while any is, and each is written again after the next write
+ * the store accepts, which is how saving resumes by itself once there is room.
+ * A phone whose disk is full refuses the same way.
+ */
+const refused = new Map<string, { id: number; value: string | null }>();
+/** The newest write asked of each key, so that a refused value is only retried while nothing newer was asked. */
+const newest = new Map<string, number>();
+let writes = 0;
+let catchingUp = false;
+const listeners = new Set<() => void>();
+
+/** True while the store has refused the latest write of any record. */
+export function storageRefused(): boolean {
+  return refused.size > 0;
+}
+
+/** Calls `listener` whenever `storageRefused()` may have changed; returns the unsubscribe. */
+export function onStorageRefusedChange(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+async function write(key: string, value: string | null): Promise<boolean> {
+  const id = ++writes;
+  newest.set(key, id);
+  let ok = true;
   try {
-    await AsyncStorage.setItem(key, JSON.stringify(value));
-    return true;
+    if (value === null) await AsyncStorage.removeItem(key);
+    else await AsyncStorage.setItem(key, value);
+  } catch {
+    ok = false;
+  }
+  const before = refused.size;
+  if (ok) refused.delete(key);
+  // A write that failed after a newer one to the same key was asked has nothing
+  // left to retry: the newer one is what the key should hold, and it reports for itself.
+  else if (newest.get(key) === id) refused.set(key, { id, value });
+  if (refused.size !== before) for (const listener of listeners) listener();
+  if (ok && refused.size > 0) void catchUp();
+  return ok;
+}
+
+/**
+ * There is room again: write what was refused, each record once, and only while
+ * the refused value is still the newest one asked of its key. On the web a write
+ * takes effect when it is called, so a value refused earlier must not land over
+ * one written since.
+ */
+async function catchUp(): Promise<void> {
+  if (catchingUp) return;
+  catchingUp = true;
+  try {
+    for (const [key, entry] of [...refused]) {
+      if (newest.get(key) === entry.id) await write(key, entry.value);
+    }
+  } finally {
+    catchingUp = false;
+  }
+}
+
+/** True when the write reached the store. A refusal never interrupts play; `storageRefused()` says so instead. */
+export async function saveJSON(key: string, value: unknown): Promise<boolean> {
+  let text: string;
+  try {
+    text = JSON.stringify(value);
   } catch {
     return false;
   }
+  return write(key, text);
 }
 
 export function safeParse<T>(text: string): T {
@@ -113,11 +185,9 @@ export async function saveGame(state: GameState, difficulty: Difficulty): Promis
   // long enough to cross the ceiling is the last one anyone would want deleted.
   const trimmed = state.log.length > MAX_LOG ? { ...state, log: state.log.slice(-MAX_LOG) } : state;
   const payload: SavedGame = { version: 1, savedAt: Date.now(), difficulty, state: trimmed };
-  try {
-    await AsyncStorage.setItem(KEY, JSON.stringify(payload));
-  } catch {
-    // A failed autosave must never interrupt play.
-  }
+  // A failed autosave never interrupts play; `storageRefused()` says so instead,
+  // and the save is written again once the store accepts a write.
+  await write(KEY, JSON.stringify(payload));
 }
 
 /**
@@ -222,6 +292,34 @@ function isLastShot(v: unknown): boolean {
     v.sunk.cells.length === SHIP_CLASSES[v.sunk.classId as ShipClassId].length &&
     v.sunk.cells.every(isCell)
   );
+}
+
+/**
+ * What the opponent's last shot did to you, as the game screen's report strip
+ * draws it: `coordLabel` of the cell, and `SHIP_CLASSES[classId].name` for a hit.
+ */
+function isIncoming(v: unknown): boolean {
+  return (
+    isRecord(v) &&
+    isCell(v) &&
+    (v.result === 'hit' || v.result === 'miss') &&
+    isCount(v.turn) &&
+    (v.classId === undefined || isKeyOf(SHIP_CLASSES, v.classId)) &&
+    typeof v.sunk === 'boolean'
+  );
+}
+
+function isPose(v: unknown): boolean {
+  return isRecord(v) && isCell(v.bow) && HEADINGS.some((h) => h === v.heading);
+}
+
+/**
+ * The part of a manoeuvre's record the game screen reads to play your own move
+ * out once on the board: which hull, and the pose it left and reached. The rest
+ * of the record is read by nothing yet; whatever comes to read it extends this.
+ */
+function isMoveRecord(v: unknown): boolean {
+  return isRecord(v) && typeof v.shipId === 'string' && isPose(v.from) && isPose(v.to);
 }
 
 function isPlayer(v: unknown, index: 0 | 1): boolean {
@@ -338,12 +436,40 @@ function trimCounts(v: unknown): void {
   }
 }
 
+/**
+ * Drop, in place, the two fields only the screens read and only for show: a
+ * player's `lastIncoming`, the report strip's line about the opponent's last
+ * shot, and a log entry's `move`, which lets the board play your own manoeuvre
+ * out once. Neither is in a save older than the feature that wrote it, and
+ * every screen draws a state without them – the line is not shown, the move not
+ * played – so one that does not hold up costs that and nothing more, not the
+ * match. Kept, the renderer indexed `SHIP_CLASSES` with whatever class the field
+ * named ('constructor' drew "hit your Object", an unknown one threw, and the
+ * battle was set aside on every Resume) and read a pose off `null`. Run after
+ * `trimCounts`, so the log it walks is already within its ceiling.
+ */
+function dropUnreadable(v: unknown): void {
+  if (!isRecord(v) || !isRecord(v.state)) return;
+  const state = v.state;
+  if (Array.isArray(state.players)) {
+    for (const player of state.players) {
+      if (isRecord(player) && player.lastIncoming !== undefined && !isIncoming(player.lastIncoming)) delete player.lastIncoming;
+    }
+  }
+  if (Array.isArray(state.log)) {
+    for (const entry of state.log) {
+      if (isRecord(entry) && entry.move !== undefined && !isMoveRecord(entry.move)) delete entry.move;
+    }
+  }
+}
+
 export async function loadGame(): Promise<SavedGame | null> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return null;
     const parsed: unknown = safeParse(raw);
     trimCounts(parsed);
+    dropUnreadable(parsed);
     if (!isValid(parsed)) {
       await clearGame();
       return null;
@@ -354,10 +480,11 @@ export async function loadGame(): Promise<SavedGame | null> {
   }
 }
 
+/**
+ * Through the same write as a save, so that clearing is the newest thing asked
+ * of the key: a save the store refused earlier is then never written back over
+ * a battle that has since finished.
+ */
 export async function clearGame(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(KEY);
-  } catch {
-    // Nothing useful to do if the store is unavailable.
-  }
+  await write(KEY, null);
 }

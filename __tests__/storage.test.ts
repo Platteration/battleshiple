@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearGame, loadGame, saveGame } from '../src/storage';
+import { clearGame, loadGame, onStorageRefusedChange, saveGame, saveJSON, storageRefused } from '../src/storage';
 import { createGame, endTurn, fire, maneuver } from '../src/engine/game';
 import { makeShip } from '../src/engine/ships';
 import { GameState, Ship } from '../src/engine/types';
@@ -332,6 +332,100 @@ describe('storage', () => {
       expectRejected((p) => p.state.players[0].ships.push(JSON.parse(JSON.stringify(p.state.players[1].ships[4])))));
   });
 
+  // Two fields only the screens read, and only for show: the report strip's line
+  // about the opponent's last shot, and the record that lets the board play your
+  // own manoeuvre out once. Neither is in a save older than the feature, so a
+  // state without them is one every screen already draws; one that does not hold
+  // up is dropped, and the match kept. Kept, the game screen indexed SHIP_CLASSES
+  // with whatever the field named and read a pose off null, and every Resume of
+  // the battle ended in "Signal lost".
+  describe('a field only the screens read is dropped when it does not hold up, and the match kept', () => {
+    // A hit on player 0's carrier by the computer, from play: the computer's turn
+    // is fired and ended in one block, so the save is player 0 to fire again.
+    function hitByComputer(): GameState {
+      let g = game();
+      g = endTurn(fire(g, { r: 9, c: 9 }).state);
+      g = endTurn(fire(g, { r: 0, c: 4 }).state);
+      expect(g.players[0].lastIncoming).toEqual({ r: 0, c: 4, result: 'hit', turn: 1, classId: 'carrier', sunk: false });
+      return g;
+    }
+
+    async function loadPlayed(g: GameState, mutate: (p: Record<string, any>) => void = () => {}) {
+      await saveGame(g, 'normal');
+      const payload = JSON.parse((await AsyncStorage.getItem(KEY)) as string);
+      mutate(payload);
+      await AsyncStorage.setItem(KEY, JSON.stringify(payload));
+      const loaded = await loadGame();
+      // The match itself is never what pays: it loads, and it is still on the disk.
+      expect(loaded).not.toBeNull();
+      expect(await AsyncStorage.getItem(KEY)).not.toBeNull();
+      return loaded!;
+    }
+
+    test('the last incoming shot play writes is kept as it was', async () => {
+      const g = hitByComputer();
+      const loaded = await loadPlayed(g);
+      expect(loaded.state.players[0].lastIncoming).toEqual(g.players[0].lastIncoming);
+    });
+
+    test('a last incoming shot naming a class there is not', async () => {
+      const g = hitByComputer();
+      const loaded = await loadPlayed(g, (p) => (p.state.players[0].lastIncoming.classId = 'frigate'));
+      expect(loaded.state.players[0].lastIncoming).toBeUndefined();
+      // Only the line goes: the hit itself is in the hull, where it always was.
+      expect(loaded.state.players[0].ships.find((s) => s.id === 'carrier')?.hits).toEqual([true, false, false, false, false]);
+      expect(loaded.state.turn).toBe(g.turn);
+    });
+
+    // Walked rather than listed, so a name nobody thought of is covered too.
+    test.each(Object.getOwnPropertyNames(Object.prototype))('a last incoming shot naming %s, which only Object.prototype has', async (name) => {
+      const loaded = await loadPlayed(hitByComputer(), (p) => (p.state.players[0].lastIncoming.classId = name));
+      expect(loaded.state.players[0].lastIncoming).toBeUndefined();
+    });
+
+    test.each([
+      ['off the board', (i: Record<string, any>) => (i.r = 10)],
+      ['with no turn', (i: Record<string, any>) => delete i.turn],
+      ['with neither hit nor miss', (i: Record<string, any>) => (i.result = 'graze')],
+      ['with no sunk flag', (i: Record<string, any>) => delete i.sunk],
+      ['that is not a record at all', (_i: Record<string, any>, p: Record<string, any>) => (p.state.players[0].lastIncoming = 'hit')],
+    ])('a last incoming shot %s', async (_label, mutate) => {
+      const loaded = await loadPlayed(hitByComputer(), (p) => mutate(p.state.players[0].lastIncoming, p));
+      expect(loaded.state.players[0].lastIncoming).toBeUndefined();
+    });
+
+    // Your own manoeuvre this turn, still to be played out on the board.
+    function movedThisTurn(): GameState {
+      let g = fire(game(), { r: 9, c: 9 }).state;
+      g = maneuver(g, 'patrol', { kind: 'ahead', distance: 1 });
+      expect(g.log.at(-1)?.move?.shipId).toBe('patrol');
+      return g;
+    }
+    const moveEntry = (s: GameState) => s.log.find((e) => e.kind === 'move')!;
+
+    test('the manoeuvre record play writes is kept as it was', async () => {
+      const g = movedThisTurn();
+      const loaded = await loadPlayed(g);
+      expect(moveEntry(loaded.state).move).toEqual(JSON.parse(JSON.stringify(moveEntry(g).move)));
+    });
+
+    test.each([
+      ['a pose it left that is null', (m: Record<string, any>) => (m.from = null)],
+      ['a pose it reached with no bow', (m: Record<string, any>) => delete m.to.bow],
+      ['a bow off the board', (m: Record<string, any>) => (m.from.bow = { r: 0, c: 12 })],
+      ['a heading that is not one', (m: Record<string, any>) => (m.from.heading = 'NE')],
+      ['a heading only Object.prototype has', (m: Record<string, any>) => (m.to.heading = 'constructor')],
+      ['no ship named', (m: Record<string, any>) => delete m.shipId],
+    ])('a manoeuvre record with %s is dropped, and its log line kept', async (_label, mutate) => {
+      const g = movedThisTurn();
+      const loaded = await loadPlayed(g, (p) => mutate(p.state.log.find((e: Record<string, any>) => e.kind === 'move').move));
+      const entry = moveEntry(loaded.state);
+      expect(entry.move).toBeUndefined();
+      expect(entry.text).toBe(moveEntry(g).text);
+      expect(loaded.state.maneuveredShipId).toBe('patrol');
+    });
+  });
+
   // The writer is bounded too, so that the reader is not left to clip a save
   // the app itself wrote. Nothing in the game ends it – no draw, no stalemate,
   // no turn limit – so a long enough match crosses the log ceiling in play.
@@ -364,6 +458,111 @@ describe('storage', () => {
     // Prove the store still works afterwards, so the next test can rely on it.
     await AsyncStorage.setItem(KEY, 'probe');
     expect(await AsyncStorage.getItem(KEY)).toBe('probe');
+  });
+});
+
+// On the web the store is the origin's localStorage, and on GitHub Pages every
+// app the account publishes shares that origin and its few megabytes: another app
+// that fills it makes every write here throw. Measured in Chromium, a battle was
+// then played with nothing stored and nothing said, and a reload offered nothing.
+describe('a write the store refuses is said, and written again once there is room', () => {
+  const SETTINGS = 'battleshiple.settings.v1';
+  const real = AsyncStorage.setItem;
+  /** Keys the store refuses to write, as a full store would; `'*'` is every key. */
+  let full = new Set<string>();
+  /** A value whose write takes effect at once, as the web's does, but whose promise is held open. */
+  let held: { value: string; release: () => void } | null = null;
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(async () => {
+    full = new Set();
+    held = null;
+    AsyncStorage.setItem = jest.fn((key: string, value: string) => {
+      if (full.has('*') || full.has(key)) return Promise.reject(new Error('QuotaExceededError'));
+      const done = real(key, value);
+      if (held && held.value === value) {
+        const gate = held;
+        return new Promise<void>((resolve) => (gate.release = () => void done.then(() => resolve())));
+      }
+      return done;
+    });
+    await AsyncStorage.clear();
+    // Whatever an earlier test left refused is cleared by an accepted write to it.
+    await clearGame();
+    await saveJSON(SETTINGS, {});
+    await AsyncStorage.clear();
+    await flush();
+    expect(storageRefused()).toBe(false);
+  });
+
+  afterEach(() => {
+    AsyncStorage.setItem = real;
+  });
+
+  test('a refused autosave is reported, never thrown, and the next accepted write puts it back', async () => {
+    const changed = jest.fn();
+    const stop = onStorageRefusedChange(changed);
+    try {
+      full.add('*');
+      const g = endTurn(fire(game(), { r: 8, c: 1 }).state);
+      await expect(saveGame(g, 'normal')).resolves.toBeUndefined();
+      expect(storageRefused()).toBe(true);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(await AsyncStorage.getItem(KEY)).toBeNull();
+
+      // Room again. Any write the store accepts – here a settings change –
+      // brings the battle back with it.
+      full.clear();
+      expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(true);
+      await flush();
+      expect(storageRefused()).toBe(false);
+      expect(changed).toHaveBeenCalledTimes(2);
+      expect((await loadGame())!.state.turn).toBe(g.turn);
+    } finally {
+      stop();
+    }
+  });
+
+  test('a settings change the store refused is written by the next autosave', async () => {
+    full.add(SETTINGS);
+    expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(false);
+    expect(storageRefused()).toBe(true);
+    full.clear();
+    await saveGame(game(), 'normal');
+    await flush();
+    expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'dark' });
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('a refused value is never written back over a newer one', async () => {
+    full.add(SETTINGS);
+    expect(await saveJSON(SETTINGS, { theme: 'dark' })).toBe(false);
+    full.clear();
+    // The newer value is in the store the moment it is asked for, as on the web,
+    // and its write has not finished when another write gets through.
+    held = { value: JSON.stringify({ theme: 'light' }), release: () => {} };
+    const newer = saveJSON(SETTINGS, { theme: 'light' });
+    await saveGame(game(), 'normal');
+    await flush();
+    expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'light' });
+    held.release();
+    expect(await newer).toBe(true);
+    expect(JSON.parse((await AsyncStorage.getItem(SETTINGS)) as string)).toEqual({ theme: 'light' });
+    expect(storageRefused()).toBe(false);
+  });
+
+  test('a battle that ended after its save was refused is not written back', async () => {
+    full.add('*');
+    await saveGame(game(), 'normal');
+    expect(storageRefused()).toBe(true);
+    full.clear();
+    // The battle ends: the save is cleared, and that is the newest word on it.
+    await clearGame();
+    await saveJSON(SETTINGS, { theme: 'dark' });
+    await flush();
+    expect(await AsyncStorage.getItem(KEY)).toBeNull();
+    expect(storageRefused()).toBe(false);
   });
 });
 

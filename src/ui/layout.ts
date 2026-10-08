@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BOARD_SIZE } from '../engine';
@@ -45,7 +46,7 @@ interface Size {
   width: number;
   height: number;
 }
-interface Insets {
+export interface Insets {
   top: number;
   bottom: number;
   left: number;
@@ -63,8 +64,27 @@ export function gameLayout(window: Size, insets: Insets, size: number = BOARD_SI
   return { cell, boardWidth: cell * (size + 1), compact };
 }
 
+/**
+ * The height drawn over the bottom of the window outside every screen: the
+ * storage note (`StorageNote`) while the store refuses to save, 0 otherwise.
+ * It includes the bottom safe-area inset, which the note pads itself by.
+ */
+export const BottomReserve = createContext(0);
+
+/**
+ * The safe-area insets a screen lays itself out by: the device's, with the
+ * bottom raised to clear whatever is drawn over the bottom of the window. Every
+ * screen pads by these and the game board is sized from them, so the note
+ * takes its height from the board rather than covering the action bar.
+ */
+export function useScreenInsets(): Insets {
+  const insets = useSafeAreaInsets();
+  const reserve = useContext(BottomReserve);
+  return reserve > insets.bottom ? { ...insets, bottom: reserve } : insets;
+}
+
 export function useGameLayout(size: number = BOARD_SIZE): GameLayout {
   const window = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   return gameLayout(window, insets, size);
 }

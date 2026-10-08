@@ -1,11 +1,18 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
+import { Dimensions, StyleSheet } from 'react-native';
 import { act, create, ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { createGame, endTurn, fire, maneuver } from '../src/engine/game';
 import { makeShip } from '../src/engine/ships';
 import { GameState, Ship } from '../src/engine/types';
 import { toPlayerView } from '../src/engine/view';
+import { loadGame, saveGame, STORAGE_KEYS } from '../src/storage';
+import { Board } from '../src/ui/components/Board';
+import { BottomReserve, gameLayout } from '../src/ui/layout';
 import { GameScreen } from '../src/ui/screens/GameScreen';
-import { ThemeProvider } from '../src/ui/theme';
+import { spacing, ThemeProvider } from '../src/ui/theme';
+
+const SAVE_KEY = STORAGE_KEYS.savegame;
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
@@ -121,5 +128,61 @@ describe('GameScreen', () => {
     root = render(g, 0);
     expect(texts(root)).toContain('Hold position & end turn');
     expect(texts(root)).not.toContain('Choose a target in enemy waters');
+  });
+
+  // The report strip indexes SHIP_CLASSES with the class your last incoming shot
+  // names, and the board reads the poses off your own manoeuvre's record. Neither
+  // re-checks: the save validator is what stands in front of them, and before it
+  // looked at either field a save naming a class there is not, or holding a null
+  // pose, threw here on every Resume and the battle was set aside.
+  test('a save whose report line and move record do not hold up still draws, through the validator', async () => {
+    let g = createGame({ mode: 'ai', names: ['You', 'AI'], fleets: [fleet(), fleet()], aiPlayer: 1 });
+    g = endTurn(fire(g, { r: 9, c: 9 }).state);
+    g = endTurn(fire(g, { r: 0, c: 4 }).state); // the computer hits your carrier
+    g = fire(g, { r: 9, c: 9 }).state;
+    g = maneuver(g, 'patrol', { kind: 'ahead', distance: 1 });
+    // Both are drawn from this state as play leaves it: the line, and the move.
+    expect(texts(render(g, 0))).toContain('AI fired at E1 and hit your Carrier!');
+    act(() => renderer.unmount());
+
+    await saveGame(g, 'normal');
+    const payload = JSON.parse((await AsyncStorage.getItem(SAVE_KEY)) as string);
+    payload.state.players[0].lastIncoming.classId = 'frigate';
+    payload.state.log.find((e: { kind: string }) => e.kind === 'move').move.from = null;
+    await AsyncStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    const loaded = await loadGame();
+    expect(loaded).not.toBeNull();
+
+    const root = render(loaded!.state, 0);
+    expect(texts(root).some((t) => /fired at E1/.test(t))).toBe(false);
+    expect(texts(root)).toContain('You');
+    expect(byLabel(root, 'E5')).toHaveLength(1);
+  });
+
+  // The storage note is drawn over the bottom of the window while the store
+  // refuses to save; its height comes out of the board, never out of the action bar.
+  test('the height kept clear for the storage note comes out of the board', () => {
+    const g = createGame({ mode: 'local', names: ['A', 'B'], fleets: [fleet(), fleet()] });
+    const boardWidth = (root: ReactTestInstance) => root.findByType(Board).props.width as number;
+    const window = Dimensions.get('window');
+    const reserve = 600;
+    const free = boardWidth(render(g, 0));
+    act(() => renderer.unmount());
+    act(() => {
+      renderer = create(
+        <ThemeProvider theme="light">
+          <BottomReserve.Provider value={reserve}>
+            <GameScreen view={toPlayerView(g, 0)} onFire={() => {}} onManeuver={() => {}} onEndTurn={() => {}} onQuit={() => {}} />
+          </BottomReserve.Provider>
+        </ThemeProvider>,
+      );
+    });
+    const kept = boardWidth(renderer.root);
+    expect(free).toBe(gameLayout(window, { top: 0, right: 0, bottom: 0, left: 0 }).boardWidth);
+    expect(kept).toBe(gameLayout(window, { top: 0, right: 0, bottom: reserve, left: 0 }).boardWidth);
+    expect(kept).toBeLessThan(free);
+    // ...and the screen pads its bottom by it, so the pinned action bar sits above the note.
+    const padded = renderer.root.findAll((n) => typeof n.type === 'string' && StyleSheet.flatten(n.props.style)?.paddingBottom === reserve + spacing.lg);
+    expect(padded.length).toBeGreaterThan(0);
   });
 });

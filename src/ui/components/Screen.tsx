@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, View, ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '../layout';
 import { makeStyles, spacing } from '../theme';
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 /** Full-screen dark background that respects notches and home indicators. */
 export function Screen({ children, scroll = true, style }: Props) {
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
+  const insets = useScreenInsets();
   const padding = {
     paddingTop: insets.top + spacing.sm,
     paddingBottom: insets.bottom + spacing.lg,

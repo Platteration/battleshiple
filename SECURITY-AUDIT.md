@@ -8,6 +8,8 @@ A dedicated security pass, separate from and later than the review in `REVIEW.md
 
 Every finding below was fixed on `claude/repo-review-security-baiyud` in 1d266ad, each with a regression test that was checked by reverting the fix and confirming the test fails. The findings are kept as written so the reasoning behind each change stays with it.
 
+Re-checked on 2026-10-08, in the exploit hunt over the website (`REVIEW.md`, Status): one claim under "Checked and sound" had stopped being true. A player's `lastIncoming`, added after this audit for the game screen's report line, carried a `classId` that reached `SHIP_CLASSES[...]` unchecked. It is checked again, with the manoeuvre record the board replays (`dropUnreadable` in `src/storage.ts`). The other claims still hold.
+
 ## Findings
 
 ### L13-1 · low — Save validator bounds every field's shape but not any array's length; the AI's target loop is quadratic in shot history, so a 763 KiB save OOM-kills the app on Resume

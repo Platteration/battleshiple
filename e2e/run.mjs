@@ -7,12 +7,13 @@
 // error, and any request outside the site's sub-path, and it plays the game: the menu and the
 // rules, the settings (the browser's Vibration row, a theme, Reset's confirmation, About and its
 // source link), a battle against the computer (deploy, fire, manoeuvre, the computer's reply), a
-// reload that resumes it, the winning shot and the after-action report, and the Pass & Play
-// handoff. Then what the host does around the game: the headers off every response, the policy
-// enforced rather than only sent, the not-found page, the repository's own files refused,
-// framing refused, the page as GitHub Pages serves it (no headers, the <meta> alone), and the
-// safety net: a bundle that does not load, one that throws, one that draws nothing, and no
-// JavaScript at all.
+// reload that resumes it, the winning shot and the after-action report, a browser whose storage
+// another app on the origin has filled (the game says so, and catches up once there is room), and
+// the Pass & Play handoff. Then what the host does around the game: the headers off every
+// response, the policy enforced rather than only sent, the not-found page, the repository's own
+// files refused, framing refused, the page as GitHub Pages serves it (no headers, the <meta>
+// alone), and the safety net: a bundle that does not load, one that throws, one that draws
+// nothing, and no JavaScript at all.
 //
 //   npm run test:e2e        builds the site, then runs this
 //   node e2e/run.mjs        runs this against the dist-web/ already built
@@ -40,6 +41,7 @@ function constant(file, name) {
 }
 const SOURCE_URL = constant('src/about.ts', 'SOURCE_URL');
 const WEB_VIBRATION_HINT = constant('src/ui/screens/SettingsScreen.tsx', 'WEB_VIBRATION_HINT');
+const STORAGE_REFUSED_WEB = constant('src/ui/components/StorageNote.tsx', 'STORAGE_REFUSED_WEB');
 const SAVE_KEY = 'battleshiple:savegame:v1';
 const SETTINGS_KEY = 'battleshiple.settings.v1';
 const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8')).expo.version;
@@ -355,6 +357,69 @@ try {
     await press(page, 'Main menu');
     await button(page, 'Play vs Computer').waitFor();
     assert.equal(await stored(page, SAVE_KEY), null, 'a finished battle leaves no save behind');
+  });
+
+  await step('a browser that will not save says so, and catches up once there is room', async () => {
+    // On GitHub Pages every app the account publishes shares this origin, and with it one
+    // localStorage allowance. Another app fills it here, and every write the game makes throws.
+    const fullContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light' });
+    await fullContext.addInitScript(seeded, 20261008);
+    try {
+      const full = await watched(fullContext, 'full storage');
+      await full.goto(site.url);
+      await button(full, 'Play vs Computer').waitFor();
+      const filled = await full.evaluate(() => {
+        let size = 1 << 22;
+        let total = 0;
+        for (let n = 0; size >= 1; ) {
+          try {
+            localStorage.setItem(`another-app.${n}`, 'x'.repeat(size));
+            total += size;
+            n += 1;
+          } catch {
+            size = Math.floor(size / 2);
+          }
+        }
+        return total;
+      });
+      assert.ok(filled > 1_000_000, `the other app filled the origin's storage (${filled} characters)`);
+      const note = full.getByTestId('storage-note');
+
+      // A settings change the browser refuses: said at once, and kept for later.
+      await press(full, 'Settings');
+      await full.getByRole('radio', { name: 'Dark' }).click();
+      await note.getByText(STORAGE_REFUSED_WEB, { exact: true }).waitFor();
+      assert.equal(await full.getByRole('alert').count(), 1, 'the note is announced, not only drawn');
+      await press(full, 'Back to menu');
+
+      // A battle the browser refuses: the note stays, and the board and the action bar are drawn
+      // above it rather than under it.
+      await press(full, 'Play vs Computer');
+      await press(full, 'Random');
+      await press(full, 'Start battle');
+      const aim = button(full, 'Choose a target in enemy waters');
+      await aim.waitFor();
+      await note.waitFor();
+      const top = (await note.boundingBox()).y;
+      for (const [what, box] of [['the action bar', await aim.boundingBox()], ['the board', await cell(full, 'J10').boundingBox()]]) {
+        assert.ok(box.y + box.height <= top + 0.5, `${what} ends at ${box.y + box.height}, above the note at ${top}`);
+      }
+      assert.equal(await stored(full, SAVE_KEY), null, 'nothing was saved');
+      assert.equal(await stored(full, SETTINGS_KEY), null);
+
+      // Room again: the other app's records go. The next move is saved, the settings chosen
+      // while the storage was full with it, and the note goes.
+      await full.evaluate(() => {
+        for (const key of Object.keys(localStorage)) if (key.startsWith('another-app.')) localStorage.removeItem(key);
+      });
+      await cell(full, 'E5').click();
+      await press(full, 'FIRE at E5');
+      await note.waitFor({ state: 'detached' });
+      assert.equal((await stored(full, SAVE_KEY))?.state?.mode, 'ai');
+      assert.equal((await stored(full, SETTINGS_KEY))?.theme, 'dark');
+    } finally {
+      await fullContext.close();
+    }
   });
 
   await step('Pass & Play covers the board between the two admirals', async () => {

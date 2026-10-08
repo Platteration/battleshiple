@@ -84,6 +84,12 @@ A match is autosaved after every change and when the app is backgrounded, so a
 phone call will not cost you a game. Quitting to the menu keeps the game, and
 the menu offers to resume or discard it. Finishing a game clears the save.
 
+If the store refuses a save (a phone whose storage is full, or a browser whose
+storage for the site is full or switched off), a note across the bottom of every
+screen says the game is not being saved, and the board makes room for it. Play
+goes on, and the battle and any settings changed meanwhile are written as soon
+as the store takes a write again; the note then goes.
+
 The save lives on the device. On Android it is deliberately kept out of cloud
 backup and device-to-device transfer, so a reinstall or a new phone starts with
 an empty menu rather than with an unfinished battle; on iOS it travels only as
@@ -93,7 +99,10 @@ spends it — the app asks first.
 A marathon match — thousands of turns, far beyond any finished game — keeps its
 oldest log lines and shot markers only up to a generous ceiling. The match
 itself is never thrown away for being too long, and a battle the app fails to
-play is set aside rather than deleted.
+play is set aside rather than deleted. Two details only the screen uses, the
+line about the opponent's last shot and the replay of your own manoeuvre, are
+dropped from a save that carries them in a form the game cannot draw; the battle
+is kept.
 
 ## Balance
 
@@ -242,7 +251,9 @@ it with `--base /battleshiple`.
 origin, `<account>.github.io`, and browser storage is per origin: a script injected into any
 other app there can read and rewrite this game's save and settings, and the reverse. The game's
 keys are prefixed (`battleshiple:savegame:v1`, `battleshiple.settings.v1`) and everything read
-back is validated before use, but a prefix is not a boundary. Give the game a domain or
+back is validated before use, but a prefix is not a boundary. The origin's storage is one
+allowance, too (about 5 MB in Chromium): another app there that fills it stops this game saving,
+which the game then says under every screen until there is room again. Give the game a domain or
 subdomain of its own (a custom domain on Pages, or any of the hosts above), which gives it an
 origin of its own.
 
@@ -279,7 +290,8 @@ npm run sim                # the balance simulation behind the numbers above
 
 `npm run test:e2e` builds the site, serves it under a sub-path with the headers `_headers`
 writes, and plays it in Chromium: the menu, the settings, a battle against the computer, a
-reload that resumes it, the winning shot, the Pass & Play handoff. It fails on any policy
+reload that resumes it, the winning shot, a browser whose storage another app has filled (the
+game says so and catches up once there is room), the Pass & Play handoff. It fails on any policy
 violation, page error, console error or request outside the site, and also checks every
 response's headers, that the policy is enforced rather than only sent, the not-found page, the
 repository's files refused, framing refused, the page with no headers at all (as GitHub Pages

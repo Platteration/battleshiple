@@ -5,8 +5,10 @@
 // --host is the host the folder is going to: github-pages, netlify, cloudflare, apache or nginx.
 // The build keeps the configuration that host reads from the folder and no other (HOSTS below),
 // so the others are not published as files where nothing refuses them: GitHub Pages serves every
-// file it is given, the configurations included. Without --host all three stay, and each host
-// ignores the others'.
+// file it is given, the configurations included. Without --host all four stay, and each host
+// ignores the others'. Cloudflare Pages serves a project at the root of its domain, where
+// functions/api/[[path]].js answers /api/*: --host cloudflare with --base is refused, since the
+// page, its bundle and its api/ would all name paths that project does not have.
 //
 // It runs `expo export --platform web`, which copies public/ (the page template, the safety net,
 // the stylesheet, the not-found page, robots.txt, security.txt and the hosts' configurations)
@@ -20,8 +22,8 @@
 //     serves the template too and the development server needs a WebSocket and HTML written
 //     from strings, both of which the policy refuses;
 //   - writes _routes.json, which tells Cloudflare Pages to run the site's one Function
-//     (functions/api/[[path]].js, the sign-in and shop API of server/kit) for `<base>/api/*` and
-//     for nothing else, so a static file never invokes it;
+//     (functions/api/[[path]].js, the sign-in and shop API of server/kit) for `/api/*`, where
+//     that Function answers, and for nothing else, so a static file never invokes it;
 //   - removes metadata.json, the exporter's manifest for EAS Update, which the site never loads,
 //     and the configurations the --host does not read;
 //   - refuses to finish when the page is not the one public/index.html describes (a later SDK
@@ -50,7 +52,7 @@ export const SITE_FILES = ['index.html', '404.html', 'guard.js', 'site.css', 'ro
 
 /**
  * The hosts' configurations, each read from the published folder by its host: the three public/
- * holds, and _routes.json, which this script writes because it names the base path.
+ * holds, and _routes.json, which this script writes (ROUTES).
  */
 export const HOST_FILES = ['_headers', '_redirects', '.htaccess', '_routes.json'];
 
@@ -68,11 +70,21 @@ export const HOSTS = {
 };
 
 /**
- * Cloudflare Pages' _routes.json for a site under `base` ('' at the root of its domain): the
- * site's Function runs for the API's paths alone, and every other request is a static file.
+ * Cloudflare Pages' _routes.json: the site's Function runs for the API's paths alone, and every
+ * other request is a static file. Pages routes a Function by where it sits under functions/, so
+ * functions/api/[[path]].js answers /api/* whatever base the pages were built for; a base in this
+ * route named a path no Function answers, and sign-in and the shop were off with nothing said.
  */
-export function routesFor(base) {
-  return `${JSON.stringify({ version: 1, include: [`${base}/api/*`], exclude: [] })}\n`;
+export const ROUTES = `${JSON.stringify({ version: 1, include: ['/api/*'], exclude: [] })}\n`;
+
+/**
+ * Why a build for `host` cannot be served under `base`, or null. Cloudflare Pages serves a project
+ * at the root of its domain: under a base, the page would ask for a bundle and an api/ that the
+ * project has only at its root.
+ */
+export function hostRefusal(host, base) {
+  if (host !== 'cloudflare' || !base) return null;
+  return `--host cloudflare builds a site for the root of its domain, where Cloudflare Pages serves a project and functions/api/[[path]].js answers /api/*; under --base ${base} its page, bundle and api/ would name paths the project does not have. Leave out --base.`;
 }
 
 /** The Content-Security-Policy the `/*` rule of a _headers file gives every path. */
@@ -167,6 +179,8 @@ export function hostFiles(host) {
 function build({ base, out: outArg, host }) {
   if (base && !BASE.test(base)) throw new Error(`--base must be a path such as /battleshiple, not ${JSON.stringify(base)}`);
   const keep = hostFiles(host);
+  const refusal = hostRefusal(host, base);
+  if (refusal) throw new Error(refusal);
   const out = outputFolder(root, outArg);
 
   const env = { ...process.env, CI: '1', EXPO_NO_TELEMETRY: '1' };
@@ -180,7 +194,7 @@ function build({ base, out: outArg, host }) {
   if (run.status !== 0) throw new Error(`expo export exited with ${run.status}`);
 
   fs.rmSync(path.join(out, 'metadata.json'), { force: true });
-  fs.writeFileSync(path.join(out, '_routes.json'), routesFor(base));
+  fs.writeFileSync(path.join(out, '_routes.json'), ROUTES);
   for (const file of [...SITE_FILES, ...HOST_FILES]) if (!fs.existsSync(path.join(out, file))) throw new Error(`the site has no ${file}`);
   for (const file of HOST_FILES) if (!keep.includes(file)) fs.rmSync(path.join(out, file));
   for (const file of ['404.html', ...(keep.includes('.htaccess') ? ['.htaccess'] : [])]) {

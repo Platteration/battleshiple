@@ -56,9 +56,10 @@ describe('settings contract', () => {
     // a website whose host runs no api/.
     expect(PRIVACY).toBe('Nothing leaves your device.');
     // On a website whose api/ offers sign-in (server/kit): what signing in and paying tell the
-    // site, and what it keeps (server/kit/README.md, "What is stored").
+    // site and Stripe, and what the site keeps (server/kit/README.md, "What is stored"). Buying
+    // sends Stripe the account id (server/api.test.mjs reads it off the Checkout session).
     expect(PRIVACY_WITH_ACCOUNT).toBe(
-      "Nothing leaves your device unless you sign in or buy. Signing in with Google tells this site an account id and your email address; a payment goes through Stripe, which handles it. The site keeps the account id, what was bought and Stripe's customer id, and your email address only while you are signed in. The game itself is never uploaded.",
+      "Nothing leaves your device unless you sign in or buy. Signing in with Google tells this site an account id and your email address; a payment goes through Stripe, which handles it and is told that account id with it. The site keeps the account id, what was bought and Stripe's customer id, and your email address only while you are signed in. The game itself is never uploaded.",
     );
     // What a supporter gets: this line in About, and nothing else.
     expect(SUPPORTER_THANKS).toBe('Thank you for supporting Battleshiple.');
@@ -67,6 +68,12 @@ describe('settings contract', () => {
     expect(appVersion(undefined)).toBe('0.0.0');
     expect(appVersion('')).toBe('0.0.0');
     expect(appVersion(7)).toBe('0.0.0');
+  });
+
+  it('README says what About says Stripe is told, and that Delete account leaves it there', () => {
+    const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8').replace(/\s+/g, ' ');
+    expect(readme).toContain('Stripe handles the payment, and the site tells Stripe that account id with it');
+    expect(readme).toContain('the payment itself stays with Stripe, with the account id it was made under');
   });
 
   it('shows the version app.json carries, and package.json agrees with it', () => {

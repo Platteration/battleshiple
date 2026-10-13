@@ -68,7 +68,7 @@ export function SettingsScreen({ onBack }: Props) {
 
   const onDeleteAccount = () =>
     // Confirmed because the account and the record of the payment cannot be brought back from
-    // here. The payment itself stays with Stripe.
+    // here. The payment itself stays with Stripe, with the account id it was made under.
     confirmAction({
       title: ACCOUNT_NOTES.deleteTitle,
       message: ACCOUNT_NOTES.deleteBody,

@@ -244,7 +244,7 @@ describe('on a site that offers sign-in and support', () => {
       expect(alert).toHaveBeenCalledTimes(1);
       const [title, message, buttons] = alert.mock.calls[0]! as [string, string, { text: string; style?: string; onPress?: () => void }[]]; // called once, just above
       expect(title).toBe('Delete account?');
-      expect(message).toMatch(/your support with it: the thank-you in About goes too\. The payment itself stays with Stripe\./);
+      expect(message).toMatch(/your support with it: the thank-you in About goes too\. The payment itself stays with Stripe, with the account id it was made under\./);
       expect(buttons.map((b) => [b.text, b.style])).toEqual([
         ['Cancel', 'cancel'],
         ['Delete account', 'destructive'],
@@ -353,5 +353,194 @@ describe('coming back to the menu from Google and Stripe', () => {
     await flush();
     expect(root.findAll((n) => n.props.accessibilityRole === 'alert')).toEqual([]);
     expect(calls).toEqual(['config', 'takeLanding', 'me']);
+  });
+});
+
+const NOBODY: Me = { user: null, entitlements: [] };
+
+/** The menu and Settings under one provider, as the app holds them: what one says, the other must agree with. */
+async function menuAndSettingsWith(client: AccountClient, wait: (ms: number) => Promise<void> = async () => {}) {
+  await act(async () => {
+    renderer = create(
+      <SettingsProvider>
+        <AccountProvider client={client} wait={wait}>
+          <HomeScreen difficulty="normal" onDifficultyChange={() => {}} loaded onStart={() => {}} onSettings={() => {}} />
+          <SettingsScreen onBack={() => {}} />
+        </AccountProvider>
+      </SettingsProvider>,
+    );
+  });
+  await flush();
+  return renderer!.root; // assigned just above
+}
+
+const alerts = (root: ReactTestInstance) => root.findAll((n) => n.props.accessibilityRole === 'alert' && typeof n.type !== 'string');
+
+/** Presses the destructive button of the confirmation the press opens. */
+async function pressConfirmed(root: ReactTestInstance, text: string) {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.[1]?.onPress?.());
+  try {
+    await press(root, text);
+    await flush();
+  } finally {
+    alert.mockRestore();
+  }
+}
+
+describe('the line on the menu goes with the visitor it spoke to', () => {
+  it.each([
+    ['a thank-you', { signIn: null, purchase: 'success' } as Landing, [SUPPORTER, NOBODY], 'Thank you — Support this app is unlocked.'],
+    ['a payment on its way', { signIn: null, purchase: 'success' } as Landing, [ADA, ADA, ADA, ADA, ADA, ADA, NOBODY], 'Payment received. It can take a minute to appear — reload to check.'],
+    ['a sign-in that did not complete', { signIn: 'failed', purchase: null } as Landing, [ADA, NOBODY], "Sign-in didn't complete."],
+  ])('%s goes when the visitor signs out', async (_what, landing, me, line) => {
+    const { client } = fakeClient({ landing, me });
+    const root = await menuAndSettingsWith(client);
+    findByText(root, line);
+    await press(root, 'Sign out');
+    await flush();
+    findByText(root, 'Sign in with Google');
+    expect(texts(root)).not.toContain(line);
+    expect(alerts(root).length).toBe(0);
+  });
+
+  it('a thank-you goes when the account is deleted', async () => {
+    const { client, calls } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [SUPPORTER, NOBODY] });
+    const root = await menuAndSettingsWith(client);
+    findByText(root, 'Thank you — Support this app is unlocked.');
+    await pressConfirmed(root, 'Delete account');
+    expect(calls.slice(-2)).toEqual(['deleteAccount', 'me']);
+    expect(texts(root)).not.toContain('Thank you — Support this app is unlocked.');
+    expect(texts(root)).not.toContain(SUPPORTER_THANKS);
+    expect(alerts(root).length).toBe(0);
+  });
+
+  it('a payment on its way goes when Buy finds the session has ended', async () => {
+    const { client } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [ADA, ADA, ADA, ADA, ADA, ADA, NOBODY], checkout: 'signin' });
+    const root = await menuAndSettingsWith(client);
+    findByText(root, 'Payment received. It can take a minute to appear — reload to check.');
+    await press(root, 'Buy');
+    await flush();
+    findByText(root, 'Sign in to buy');
+    expect(alerts(root).length).toBe(0);
+  });
+
+  it('stays while the visitor is still signed in: a refused sign-out, a refused deletion, a Buy already on record', async () => {
+    const thanks = 'Thank you — Support this app is unlocked.';
+    for (const options of [{ signOut: false }, { deleteAccount: false }]) {
+      const { client } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [SUPPORTER], ...options });
+      const root = await menuAndSettingsWith(client);
+      if (options.signOut === false) await press(root, 'Sign out');
+      else await pressConfirmed(root, 'Delete account');
+      await flush();
+      expect([options, texts(root).includes(thanks)]).toEqual([options, true]);
+      act(() => renderer!.unmount()); // rendered just above
+      renderer = undefined;
+    }
+    const pending = 'Payment received. It can take a minute to appear — reload to check.';
+    const { client } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [ADA, ADA, ADA, ADA, ADA, ADA, SUPPORTER], checkout: 'owned' });
+    const root = await menuAndSettingsWith(client);
+    findByText(root, pending);
+    await press(root, 'Buy');
+    await flush();
+    findByText(root, 'Owned');
+    findByText(root, pending);
+  });
+
+  it('a payment poll still asking when the visitor signs out puts nothing back', async () => {
+    // The poll's answer was asked for before the sign-out, under the old session: it says the
+    // visitor is signed in and has paid, and must not be drawn over the page that signed out.
+    let release = () => {};
+    const wait = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    const { client, calls } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [ADA, NOBODY, SUPPORTER] });
+    const root = await menuAndSettingsWith(client, wait);
+    expect(calls).toEqual(['config', 'takeLanding', 'me']);
+    await press(root, 'Sign out');
+    await flush();
+    findByText(root, 'Sign in with Google');
+    await act(async () => {
+      release();
+    });
+    await flush();
+    expect(calls.filter((c) => c === 'me')).toHaveLength(3); // the poll did ask, and was not listened to
+    findByText(root, 'Sign in with Google');
+    expect(texts(root)).not.toContain('Thank you — Support this app is unlocked.');
+    expect(texts(root)).not.toContain(SUPPORTER_THANKS);
+    expect(alerts(root).length).toBe(0);
+  });
+
+  it('a payment poll that ends with nobody signed in (a session that ended elsewhere) says nothing', async () => {
+    const { client, calls } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [ADA, NOBODY] });
+    const root = await menuAndSettingsWith(client);
+    await flush();
+    expect(calls.filter((c) => c === 'me')).toHaveLength(1 + POLL.tries);
+    findByText(root, 'Sign in with Google');
+    expect(alerts(root).length).toBe(0);
+  });
+});
+
+describe('the address Checkout returns to, opened by someone who is not signed in', () => {
+  it.each([
+    ['api/me says nobody is signed in', NOBODY],
+    // Not what the kit sends, but what readMe lets through: nobody signed in has paid.
+    ['api/me says nobody is signed in, whatever it lists', { user: null, entitlements: ['supporter'] }],
+    ['api/me cannot be read', null],
+  ])('is told nothing about a payment, and nothing more is asked, when %s', async (_why, me) => {
+    // Anyone can send the link: it grants nothing, and the page must not say a payment arrived.
+    const waits: number[] = [];
+    const { client, calls } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [me] });
+    const root = await menuAndSettingsWith(client, async (ms) => void waits.push(ms));
+    await flush();
+    expect(calls).toEqual(['config', 'takeLanding', 'me']);
+    expect(waits).toEqual([]);
+    expect(alerts(root).length).toBe(0);
+    findByText(root, 'Sign in with Google');
+  });
+});
+
+describe('what the provider holds to, beside the screens', () => {
+  it('a sign-out whose api/me then cannot be read draws the visitor signed out, not the old account', async () => {
+    const { client, calls } = fakeClient({ me: [ADA, null] });
+    const root = await settingsWith(client);
+    findByText(root, 'Signed in as ada@example.com');
+    await press(root, 'Sign out');
+    await flush();
+    expect(calls.slice(-2)).toEqual(['signOut', 'me']);
+    findByText(root, 'Sign in with Google');
+    findByText(root, 'Sign in to buy');
+    expect(texts(root)).not.toContain('Signed in as ada@example.com');
+  });
+
+  it('an entitlement other than supporter is not support: no thanks, no Owned, and Buy is offered', async () => {
+    const { client } = fakeClient({ me: [{ user: { email: 'ada@example.com' }, entitlements: ['pro'] }] });
+    const shown = texts(await settingsWith(client));
+    expect(shown).not.toContain(SUPPORTER_THANKS);
+    expect(shown).not.toContain('Owned');
+    expect(shown).toContain('Buy');
+  });
+
+  it('asks nothing more, and leaves the address alone, once unmounted before api/config answers', async () => {
+    let answer: (config: ApiConfig | null) => void = () => {};
+    const gate = new Promise<ApiConfig | null>((resolve) => {
+      answer = resolve;
+    });
+    const { client, calls } = fakeClient({ landing: { signIn: null, purchase: 'success' }, me: [SUPPORTER] });
+    const held: AccountClient = {
+      ...client,
+      config: () => {
+        calls.push('config');
+        return gate;
+      },
+    };
+    await settingsWith(held);
+    act(() => renderer!.unmount()); // rendered by settingsWith
+    renderer = undefined;
+    await act(async () => {
+      answer(CONFIGURED);
+    });
+    await flush();
+    expect(calls).toEqual(['config']);
   });
 });

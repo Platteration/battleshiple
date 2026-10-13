@@ -28,7 +28,11 @@ export interface AccountApi {
   user: Me['user'];
   /** Whether the server says the visitor has supported the app: About thanks them for it. */
   supported: boolean;
-  /** One line for the menu: sign-in failed, a payment received, or one still on its way. */
+  /**
+   * One line for the menu: sign-in failed, a payment received, or one still on its way. A line
+   * about a payment is said only to a visitor api/me reports signed in, and every line goes once
+   * the page finds nobody signed in (sign-out, deletion, a session that ended).
+   */
   notice: string | null;
   dismissNotice: () => void;
   /** Leaves for Google, and comes back here. */
@@ -77,6 +81,10 @@ interface Props {
 export function AccountProvider({ children, client = accountClient, wait = sleep }: Props) {
   const [state, setState] = useState<State>(OFF_STATE);
   const alive = useRef(true);
+  // Which visitor an answer is about: moves on whenever the page learns that nobody is signed in
+  // any more (sign-out, deletion, a session that ended), so the payment poll, if it is still
+  // asking, does not put a line about the payment back on a page that is signed out.
+  const visitor = useRef(0);
 
   useEffect(() => {
     alive.current = true;
@@ -88,7 +96,10 @@ export function AccountProvider({ children, client = accountClient, wait = sleep
       const me = (await client.me()) ?? SIGNED_OUT;
       if (!alive.current) return;
       const product = config.supporter;
-      const bought = landing.purchase === 'success' && product !== null;
+      // Anyone can open the address Checkout returns to. Only a visitor api/me reports signed in
+      // can have paid: to anyone else the page says nothing about a payment and asks nothing more,
+      // as for a cancelled Checkout (takeLanding has already taken it out of the address).
+      const bought = landing.purchase === 'success' && product !== null && me.user !== null;
       const thanks = product ? WORDS.thanks(product.name) : null;
       setState({
         on: true,
@@ -98,9 +109,14 @@ export function AccountProvider({ children, client = accountClient, wait = sleep
       });
       if (!bought || holds(me)) return;
       // Stripe's webhook grants the purchase, and may land after the visitor is back.
+      const asked = visitor.current;
       const { held, me: last } = await pollFor(SUPPORTER_ENTITLEMENT, () => client.me(), wait);
-      if (!alive.current) return;
-      setState((s) => ({ ...s, me: last ?? s.me, notice: held ? thanks : WORDS.paymentPending }));
+      if (!alive.current || visitor.current !== asked) return;
+      setState((s) => {
+        const now = last ?? s.me;
+        // A session that ended while the page asked (another tab signed out) hears nothing either.
+        return { ...s, me: now, notice: now.user === null ? null : held ? thanks : WORDS.paymentPending };
+      });
     })();
     return () => {
       alive.current = false;
@@ -108,8 +124,12 @@ export function AccountProvider({ children, client = accountClient, wait = sleep
   }, [client, wait]);
 
   const refresh = useCallback(async () => {
-    const me = await client.me();
-    if (alive.current) setState((s) => ({ ...s, me: me ?? SIGNED_OUT }));
+    const me = (await client.me()) ?? SIGNED_OUT;
+    if (!alive.current) return;
+    if (me.user === null) visitor.current += 1;
+    // Nobody signed in now: the line on the menu (a thank-you, a payment on its way, a sign-in
+    // that did not complete) spoke to the visitor who was, and goes with them.
+    setState((s) => ({ ...s, me, notice: me.user === null ? null : s.notice }));
   }, [client]);
 
   const signOut = useCallback(async () => {

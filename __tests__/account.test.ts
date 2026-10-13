@@ -173,7 +173,7 @@ describe('the words', () => {
     expect([WORDS.buy, WORDS.signInToBuy, WORDS.owned, WORDS.signOut, WORDS.deleteAccount]).toEqual(['Buy', 'Sign in to buy', 'Owned', 'Sign out', 'Delete account']);
     // Deleting says the support goes with the account, and the payment stays with Stripe.
     expect(ACCOUNT_NOTES.deleteBody).toMatch(/support with it/);
-    expect(ACCOUNT_NOTES.deleteBody).toMatch(/stays with Stripe/);
+    expect(ACCOUNT_NOTES.deleteBody).toMatch(/stays with Stripe, with the account id it was made under/);
   });
 });
 
@@ -249,6 +249,18 @@ describe('the web client', () => {
     expect(fetch).toHaveBeenLastCalledWith('https://b.example/battleshiple/api/me', expect.objectContaining({ method: 'DELETE' }));
     fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     expect(await web.deleteAccount()).toBe(false);
+  });
+
+  it('takes no answer but the kit’s 204 for a sign-out or a deletion that happened', async () => {
+    // A session that has ended (401), a cross-site refusal (403), a conflict (409), a server or
+    // proxy error (500, 502) and an unexpected 200 each leave the account as it was: the page
+    // says it did not work, rather than drawing the visitor signed out or the account gone.
+    for (const status of [200, 401, 403, 409, 500, 502]) {
+      answer(status, { error: 'x' });
+      expect([status, 'signOut', await web.signOut()]).toEqual([status, 'signOut', false]);
+      answer(status, { error: 'x' });
+      expect([status, 'deleteAccount', await web.deleteAccount()]).toEqual([status, 'deleteAccount', false]);
+    }
   });
 
   it('buys by sending the product as JSON, and leaves only for Stripe’s Checkout', async () => {

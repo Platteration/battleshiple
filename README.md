@@ -204,8 +204,9 @@ The game is also a website: the same app, drawn by react-native-web, played enti
 browser. Nothing moves to a server — the host only hands out the files and the headers around
 them, and the game itself makes no request once it has loaded. The page asks the site's own
 `api/config` once, for the optional sign-in and shop (see [Sign-in and the shop](#sign-in-and-the-shop));
-on a host that runs no API that is one 404 and nothing more, and its policy allows a connection
-to the site's own origin and nowhere else (`connect-src 'self'`).
+on a host that runs no API that is one 404 (a 502 on nginx as shipped, until its API location is
+deleted) and nothing more, and its policy allows a connection to the site's own origin and
+nowhere else (`connect-src 'self'`).
 
 ```bash
 npm run build:web -- --host netlify                                  # the site, for the root of a domain
@@ -309,7 +310,9 @@ Where it is on, Settings gains an **Account** card (Sign in with Google; signed 
 Sign out and Delete account, which asks first) and a **Support this app** card (its price, then
 Buy, or Sign in to buy, and Owned once paid). Buy leaves for Stripe's own Checkout page; the page
 never loads a Google or Stripe script. Back on the menu, a line says the payment arrived (or that
-it can take a minute), or that a sign-in did not complete.
+it can take a minute), or that a sign-in did not complete. A line about a payment is said only to
+a visitor the site reports signed in (anyone can open the address Checkout returns to), and every
+line goes when the visitor signs out or deletes the account.
 
 What a supporter gets is a line of thanks in About: *Thank you for supporting Battleshiple.*
 Nothing else in the game changes. That line is drawn from what the site's `api/me` reports; a
@@ -319,24 +322,33 @@ grants it.
 
 What leaves the device on such a site, and only when the visitor signs in or pays: Google tells
 the site an account id and (when Google has verified it) an email address; Stripe handles the
-payment. The site keeps the account id, what was bought and Stripe's customer id, and the email
-in the session record alone (thirty days at most, deleted on sign-out). Delete account removes the
-account, its sessions and the record of the payment; the payment itself stays with Stripe. The
-game itself, its save and its settings never leave the browser.
+payment, and the site tells Stripe that account id with it (as the Checkout session's reference
+and in the payment's metadata), but not the email address. The site keeps the account id, what
+was bought and Stripe's customer id, and the email in the session record alone (thirty days at
+most, deleted on sign-out). Delete account removes the account, its sessions and the record of
+the payment; the payment itself stays with Stripe, with the account id it was made under. The
+game itself, its save and its settings never leave the browser; what the browser keeps for the
+account is the sign-in's cookie (thirty days at most), and nothing in the game's storage.
 
 **Cloudflare Pages** (the reference host) runs `functions/api/[[path]].js`, the kit's three-line
 entry; `npm run build:web -- --host cloudflare` writes `_routes.json`
 (`{"version":1,"include":["/api/*"],"exclude":[]}`), so only `api/*` invokes the function and every
-static file is served as it is. Cloudflare's documentation says `_headers` is not applied to a
-Function's responses and `_redirects` not to requests a Function serves: the API sends its own
-headers (a `default-src 'none'` policy, `no-referrer`, `nosniff`), and the site's policy stays on
-the static files. Pages does not apply the 404 rules `_redirects` holds anyway, and answers a
+static file is served as it is. Pages serves a project at the root of its domain, where the function
+answers `/api/*`, so a Cloudflare build is for the root: `--host cloudflare` with `--base` is
+refused, since its page, bundle and `api/` would name paths the project does not have.
+Cloudflare's documentation says `_headers` is not applied to a Function's responses and
+`_redirects` not to requests a Function serves: the API sends its own headers (a
+`default-src 'none'` policy, `no-referrer`, `nosniff`), and the site's policy stays on the static
+files. Pages does not apply the 404 rules `_redirects` holds anyway, and answers a
 missing static path with the site's `404.html`. Bind a KV namespace as `KIT_STORE`.
 
 **Self-hosted**: `KIT_DATA_DIR=/var/lib/battleshiple-api node server/start.mjs` listens on
 127.0.0.1:8788 and keeps one file per record under that directory (outside the web root, one
-process per directory). `deploy/nginx.conf` sends `location ^~ /api/` to it (a 502 while it is not
-running, and the page draws neither). Apache's `.htaccess` cannot proxy: in the virtual host,
+process per directory). `deploy/nginx.conf` sends `location ^~ /api/` to it. While it is not
+running nginx answers there 502 (504 when it does not answer in time) with the site's not-found
+page and every header the site's files carry, and the page draws neither; a site that runs no API
+can delete that location, and `api/` then answers 404 like any other address that is not the
+site's. Apache's `.htaccess` cannot proxy: in the virtual host,
 `ProxyPass "/api/" "http://127.0.0.1:8788/api/"` with mod_proxy and mod_proxy_http.
 
 The variables, never in the repository and never sent to the page: `APP_URL` (the site's address

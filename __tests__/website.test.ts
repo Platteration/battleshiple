@@ -358,10 +358,27 @@ describe("what the hosts refuse: the hosts' configurations, metadata.json, and f
       'proxy_set_header Connection "";',
       'client_max_body_size 1m;',
       'proxy_read_timeout 30s;',
+      'error_page 502 504 /404.html;',
       'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
     ]);
     expect(['/api/config', '/api/auth/google/callback', '/api/webhooks/stripe'].map(nginxProxies)).toEqual([true, true, true]);
     expect(['/api', '/apiary', '/functions/api/[[path]].js', '/server/kit/app.js'].map(nginxProxies)).toEqual([false, false, false, false]);
+  });
+
+  it("nginx answers for an API that is not running with the site's not-found page and every header, not its own page", () => {
+    // With no API on 127.0.0.1:8788 nginx answers 502 itself (504 when it does not answer in
+    // time). Its own error page went out with the API location's one add_header, HSTS, and
+    // nothing else (measured on nginx 1.24). error_page sends it to /404.html, which the
+    // allow-list serves through a location with no add_header of its own, so every header of the
+    // server block goes with it; the status stays (no `=`), so the page reads it as no API. Measured
+    // on nginx 1.24: 502 (and 504 with a backend that never answers) for GET, POST and DELETE,
+    // the site's 404 page, all nine headers. Without proxy_intercept_errors the API's own answers,
+    // its JSON 404 among them, pass through as it sent them.
+    const block = /^ {2}location \^~ \/api\/ \{\n([\s\S]*?)\n {2}\}$/m.exec(NGINX)?.[1] ?? '';
+    expect(block.match(/^\s*error_page .*$/gm)?.map((l) => l.trim())).toEqual(['error_page 502 504 /404.html;']);
+    expect(nginxServes('/404.html')).toBe(true);
+    expect(nginxProxies('/404.html')).toBe(false);
+    expect(NGINX).not.toMatch(/proxy_intercept_errors/);
   });
 
   it('nginx loads on the nginx current distributions ship, which predates `http2 on;`', () => {
@@ -646,32 +663,57 @@ describe('the build', () => {
     ['no host named', ['_headers', '_redirects', '.htaccess', '_routes.json']],
   ])('a build for %s keeps the configuration that host reads from the folder, and no other', (host, kept) => {
     // GitHub Pages serves every file it is given: a configuration it does not read is a file
-    // anyone can fetch there.
+    // anyone can fetch there. Cloudflare Pages serves a project at the root of its domain, so its
+    // build has no base (a base is refused for it, below).
     const box = sandbox();
     try {
       const hostArgs = host === 'no host named' ? [] : ['--host', host];
-      expect(box.run(...hostArgs, '--base', '/battleshiple')).toEqual({ status: 0, stderr: '' });
+      const baseArgs = host === 'cloudflare' ? [] : ['--base', '/battleshiple'];
+      expect(box.run(...hostArgs, ...baseArgs)).toEqual({ status: 0, stderr: '' });
       const out = path.join(box.repo, 'dist-web');
       expect(['_headers', '_redirects', '.htaccess', '_routes.json'].filter((f) => fs.existsSync(path.join(out, f)))).toEqual(kept);
       for (const f of ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt']) expect([f, fs.existsSync(path.join(out, f))]).toEqual([f, true]);
       if (kept.includes('.htaccess')) expect(fs.readFileSync(path.join(out, '.htaccess'), 'utf8')).toMatch(/^ErrorDocument 404 \/battleshiple\/404\.html$/m);
+      if (baseArgs.length) expect(box.exporter()?.base).toBe('/battleshiple');
     } finally {
       box.done();
     }
   });
 
   it.each([
-    ['/battleshiple', '/battleshiple/api/*'],
-    ['', '/api/*'],
-  ])("tells Cloudflare Pages, under the base %j, to run the site's Function for its api/ alone", (base, route) => {
-    // functions/api/[[path]].js is the sign-in and shop API (server/kit). Without _routes.json
-    // Pages generates one of its own; this one is explicit, so a static file never invokes it.
+    ['for Cloudflare Pages', ['--host', 'cloudflare']],
+    ['with no host named, under a base', ['--base', '/battleshiple']],
+  ])("tells Cloudflare Pages to run the site's Function for /api/* alone, %s", (_how, args) => {
+    // functions/api/[[path]].js is the sign-in and shop API (server/kit), and Pages routes a
+    // Function by where it sits under functions/: it answers /api/* and no other path, whatever
+    // base the pages were built for. Without _routes.json Pages generates one of its own; this
+    // one is explicit, so a static file never invokes it.
+    expect(fs.existsSync(path.join(root, 'functions', 'api', '[[path]].js'))).toBe(true);
+    expect(fs.readdirSync(path.join(root, 'functions'))).toEqual(['api']);
     const box = sandbox();
     try {
-      expect(box.run('--host', 'cloudflare', ...(base ? ['--base', base] : []))).toEqual({ status: 0, stderr: '' });
+      expect(box.run(...args)).toEqual({ status: 0, stderr: '' });
       const routes = fs.readFileSync(path.join(box.repo, 'dist-web', '_routes.json'), 'utf8');
-      expect(routes).toBe(`{"version":1,"include":["${route}"],"exclude":[]}\n`);
-      expect(JSON.parse(routes)).toEqual({ version: 1, include: [route], exclude: [] });
+      expect(routes).toBe('{"version":1,"include":["/api/*"],"exclude":[]}\n');
+      expect(JSON.parse(routes)).toEqual({ version: 1, include: ['/api/*'], exclude: [] });
+    } finally {
+      box.done();
+    }
+  });
+
+  it.each([
+    [['--host', 'cloudflare', '--base', '/battleshiple']],
+    [['--base', '/battleshiple', '--host', 'cloudflare']],
+  ])('refuses a Cloudflare Pages build under a base path, before the exporter runs: %j', (args) => {
+    // Pages serves a project at the root of its domain: a page asking for /battleshiple/_expo/...
+    // and /battleshiple/api/... there finds neither, and sign-in and the shop are off unseen.
+    const box = sandbox();
+    try {
+      const result = box.run(...args);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/^build-web: --host cloudflare builds a site for the root of its domain, where Cloudflare Pages serves a project and functions\/api\/\[\[path\]\]\.js answers \/api\/\*; under --base \/battleshiple .*Leave out --base\.\n$/);
+      expect(box.exporter()).toBeNull();
+      expect(fs.existsSync(path.join(box.repo, 'dist-web'))).toBe(false);
     } finally {
       box.done();
     }

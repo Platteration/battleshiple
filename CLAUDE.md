@@ -139,13 +139,15 @@ bundle (SDK 57 copies it whole, `.well-known/` and `.htaccess` included) and rea
 `app.config.js`'s `WEB_BASE_URL` → `experiments.baseUrl`), keeps only the configuration the
 `--host` reads from the folder (`HOSTS`: `_headers` and `_redirects` for Netlify, `_headers` and
 `_routes.json` for Cloudflare Pages, `.htaccess` for Apache, none for nginx or GitHub Pages, which
-serves every file it is given; all four without `--host`; `_routes.json` is written by the build,
-with the base path in it), writes the policy into the built page as a `<meta>` taken
-from `public/_headers`, and refuses a page that is not the template. Inside the checkout it writes
-only to `dist-web` or `dist` (`OUT_FOLDERS`), the folders `.gitignore` and the shared
-`eslint.config.js` both ignore. The policy is
-not in the template because `expo start --web` serves it too, and the dev server needs a WebSocket
-and its overlay's `innerHTML`; `npm run web` was checked by hand to draw the game with the template.
+serves every file it is given; all four without `--host`; `_routes.json` is written by the build
+and names `/api/*`, where `functions/api/[[path]].js` answers whatever the base, and
+`--host cloudflare` with `--base` is refused, since Pages serves a project at the root of its
+domain), writes the policy into the built page as a `<meta>` taken from `public/_headers`, and
+refuses a page that is not the template. Inside the checkout it writes only to `dist-web` or
+`dist` (`OUT_FOLDERS`), the folders `.gitignore` and the shared `eslint.config.js` both ignore.
+The policy is not in the template because `expo start --web` serves it too, and the dev server
+needs a WebSocket and its overlay's `innerHTML`; `npm run web` was checked by hand to draw the game
+with the template.
 
 One policy, written in four places — `public/_headers` (Netlify, Cloudflare Pages),
 `public/.htaccess` (Apache), `deploy/nginx.conf`, and the `<meta>` in `public/404.html` and the
@@ -203,11 +205,14 @@ ESLint and tsconfig with nothing ignored, and `npm test` runs its self-test. `se
 sells the one product; `functions/api/[[path]].js` is the Cloudflare Pages entry (three lines,
 pinned by `server/api.test.mjs`); `server/start.mjs` the Node one on 127.0.0.1:8788, behind
 `deploy/nginx.conf`'s `location ^~ /api/`, whose one `add_header` is the server block's HSTS line
-(`website.test.ts` allows exactly that location an `add_header`). `server/package.json` says
-`"type": "module"`, without which Node warns on every start. `scripts/build-web.mjs` writes
-`_routes.json` (`<base>/api/*`) for Cloudflare Pages; the other hosts refuse it. `server/fakes.mjs`
-is a fake Google and Stripe for the tests, handed to the kit through `createApp({ fetch })`, never
-through a variable that names another host.
+(`website.test.ts` allows exactly that location an `add_header`) and whose
+`error_page 502 504 /404.html` answers for an API that is not running with the site's not-found
+page and every header, status kept (nginx's own page went out with HSTS alone; measured on nginx
+1.24, 504 with a backend that never answers). `server/package.json` says `"type": "module"`,
+without which Node warns on every start. `scripts/build-web.mjs` writes `_routes.json` (`/api/*`)
+for Cloudflare Pages; the other hosts refuse it. `server/fakes.mjs` is a fake Google and Stripe
+for the tests, handed to the kit through `createApp({ fetch })`, never through a variable that
+names another host.
 
 On the page: `src/accountModel.ts` (pure: reads `api/config` and `api/me` field by field, the
 words, the poll after Checkout), `src/accountClient.web.ts` (the one module that makes a request,
@@ -220,11 +225,20 @@ so; the confirmation of Delete account is `confirmAction`. What a supporter gets
 `SUPPORTER_THANKS` in About and nothing else (`account-screen.test.tsx` holds that only
 SettingsScreen reads `supported`). About's privacy sentence is `PRIVACY` on a phone and on a site
 with no sign-in, `PRIVACY_WITH_ACCOUNT` where sign-in is on (both in `src/about.ts`, pinned by the
-contract test). The landing notices (sign-in failed, the thanks, payment pending) are drawn on the
-menu, which is where Google and Stripe send the visitor back. Nothing about the account is stored
-on the device. `appConfig.test.ts` exempts exactly `src/accountClient.web.ts` from the no-network
-scan, pins its two fetches, its one outside address and its two navigations, and holds the twin
-inert and the module a native build resolves.
+contract test); it says that buying tells Stripe the account id (the kit's
+`createCheckoutSession` sends it as `client_reference_id` and in the payment's metadata, which
+`server/api.test.mjs` asserts, with no email). The landing notices (sign-in failed, the thanks,
+payment pending) are drawn on the menu, which is where Google and Stripe send the visitor back. A
+line about a payment is said, and polled for, only when the first `api/me` reports someone signed
+in: anyone can open `?purchase=success`, and a signed-out landing is only taken out of the
+address, as `?purchase=cancelled` is. Every line goes once a refresh finds nobody signed in
+(sign-out, deletion, a Buy that finds the session ended), and a poll still asking then is not
+applied after it (`visitor` in `account.tsx`). The app stores nothing about the account itself
+(nothing in AsyncStorage or localStorage); the sign-in is the kit's session cookie, which the
+browser keeps for up to thirty days, and its ten-minute oauth cookie while a sign-in is under way.
+`appConfig.test.ts` exempts exactly `src/accountClient.web.ts` from the no-network scan, pins its
+two fetches, its one outside address and its two navigations, and holds the twin inert and the
+module a native build resolves.
 
 The browser suite serves the built site with the kit beside it (`e2e/serve.mjs`'s `api`, as
 Cloudflare Pages runs the function) and plays the whole flow under the site's policy. Playwright

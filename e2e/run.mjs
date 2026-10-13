@@ -849,18 +849,25 @@ try {
       const delivery = signedDelivery(fakes.paid(checkouts[0]));
       const hook = await fetch(`${shop.url}api/webhooks/stripe`, { method: 'POST', headers: { 'content-type': 'application/json', 'stripe-signature': delivery.signature }, body: delivery.body });
       assert.equal(hook.status, 200);
-      // The page asks api/me until the payment shows, then says so on the menu.
-      await text('Thank you — Support this app is unlocked.').waitFor({ timeout: 20000 });
-      await press(p, 'Dismiss');
+      // The page asks api/me until the payment shows, then says so on the menu. The line stays up,
+      // undismissed, while the visitor goes on to Settings.
+      const thanksLine = 'Thank you — Support this app is unlocked.';
+      await text(thanksLine).waitFor({ timeout: 20000 });
       await settings();
       await text(SUPPORTER_THANKS).waitFor();
       await text('Owned').waitFor();
       assert.equal(await button(p, 'Buy').count(), 0);
 
-      // Signing out takes the thanks away; the support is the account's, so signing in brings it back.
+      // Signing out takes the thanks away, About's and the menu's, which spoke to the visitor who
+      // was signed in; the support is the account's, so signing in brings About's back.
       await press(p, 'Sign out');
       await button(p, 'Sign in with Google').waitFor();
       assert.equal(await thanked(), false);
+      await press(p, 'Back to menu');
+      await menu();
+      assert.equal(await text(thanksLine).count(), 0, 'signed out, the menu no longer thanks the visitor');
+      assert.equal(await p.getByRole('alert').count(), 0);
+      await settings();
       await leaveAndReturn('Sign in with Google', callback);
       await settings();
       await text(SUPPORTER_THANKS).waitFor();
@@ -891,6 +898,17 @@ try {
       await menu();
       await p.waitForFunction(() => location.search === '');
       assert.equal(await p.getByRole('alert').count(), 0);
+      // So does the address Checkout returns to, opened by someone who is not signed in (anyone can
+      // send the link): no word of a payment, and api/me is asked once, not polled for. One poll
+      // interval (POLL.everyMs, 3 s) is waited out to see that nothing more is asked.
+      const asked = () => shop.apiRequests.filter((r) => r === `GET ${BASE}/api/me`).length;
+      const before = asked();
+      await p.goto(`${shop.url}?purchase=success`);
+      await menu();
+      await p.waitForFunction(() => location.search === '');
+      await p.waitForTimeout(3500);
+      assert.equal(asked() - before, 1, 'signed out, api/me is asked once and not polled');
+      assert.equal(await p.getByRole('alert').count(), 0, 'signed out, the menu says nothing about a payment');
     } finally {
       await visitor.close();
       shop.server.close();

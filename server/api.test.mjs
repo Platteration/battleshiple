@@ -213,6 +213,12 @@ describe('a host of its own: server/start.mjs through the Node adapter', () => {
     assert.equal(asked.get('metadata[app]'), 'battleshiple');
     assert.equal(asked.get('metadata[product]'), 'supporter');
     assert.equal(asked.get('metadata[user]'), 'google:1001');
+    // What Stripe is told about the visitor, as About's privacy sentence and the README say: the
+    // account id, as the session's reference and in the payment's own metadata (which Delete
+    // account cannot take back there), and nothing of the email address Google gave the site.
+    assert.equal(asked.get('client_reference_id'), 'google:1001');
+    assert.equal(asked.get('payment_intent_data[metadata][user]'), 'google:1001');
+    assert.ok(![...asked.values()].some((value) => value.includes('ada@example.com')), 'the site sends Stripe no email address');
     assert.equal(asked.get('success_url'), `${APP_URL}?purchase=success`);
     assert.equal(asked.get('cancel_url'), `${APP_URL}?purchase=cancelled`);
 

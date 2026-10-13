@@ -229,7 +229,7 @@ export const WORDS = {
 export const ACCOUNT_NOTES = {
   deleteTitle: 'Delete account?',
   deleteBody:
-    'This deletes your account on this site, and your support with it: the thank-you in About goes too. The payment itself stays with Stripe. This cannot be undone.',
+    'This deletes your account on this site, and your support with it: the thank-you in About goes too. The payment itself stays with Stripe, with the account id it was made under. This cannot be undone.',
   deleteConfirm: 'Delete account',
   deleteCancel: 'Cancel',
   deleteFailed: 'The account could not be deleted. Try again.',

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../src/about';
+import { APP_NAME, LICENCE, PRIVACY, PRIVACY_WITH_ACCOUNT, SOURCE_URL, SUPPORTER_THANKS, TAGLINE, appVersion } from '../src/about';
 import { DEFAULT_SETTINGS } from '../src/settings';
 import { STORAGE_KEYS } from '../src/storage';
 import { SETTINGS_ROWS } from '../src/ui/screens/SettingsScreen';
@@ -21,6 +21,8 @@ describe('settings contract', () => {
     // The savegame keeps its colon form: it predates the dot scheme and a
     // rename for spelling would put every unfinished battle through a
     // migration for nothing. The exception is listed here so it stays visible.
+    // The website's account stores nothing on the device: the session is the
+    // server's HttpOnly cookie, and what was bought is asked of api/me.
     expect(STORAGE_KEYS).toEqual({
       savegame: 'battleshiple:savegame:v1',
       settings: 'battleshiple.settings.v1',
@@ -50,8 +52,16 @@ describe('settings contract', () => {
     expect(TAGLINE).toContain('fleets move');
     expect(LICENCE).toBe('MIT licence');
     expect(SOURCE_URL).toBe('https://github.com/Platteration/battleshiple');
-    // Backed by appConfig.test.ts, which scans the source for network code.
+    // Backed by appConfig.test.ts, which scans the source for network code. On a phone, and on
+    // a website whose host runs no api/.
     expect(PRIVACY).toBe('Nothing leaves your device.');
+    // On a website whose api/ offers sign-in (server/kit): what signing in and paying tell the
+    // site, and what it keeps (server/kit/README.md, "What is stored").
+    expect(PRIVACY_WITH_ACCOUNT).toBe(
+      "Nothing leaves your device unless you sign in or buy. Signing in with Google tells this site an account id and your email address; a payment goes through Stripe, which handles it. The site keeps the account id, what was bought and Stripe's customer id, and your email address only while you are signed in. The game itself is never uploaded.",
+    );
+    // What a supporter gets: this line in About, and nothing else.
+    expect(SUPPORTER_THANKS).toBe('Thank you for supporting Battleshiple.');
     // A missing or empty configured version reads as a placeholder, never "undefined".
     expect(appVersion('1.0.0')).toBe('1.0.0');
     expect(appVersion(undefined)).toBe('0.0.0');

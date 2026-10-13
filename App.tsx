@@ -21,6 +21,7 @@ import {
   randomFleet,
   toPlayerView,
 } from './src/engine';
+import { AccountProvider } from './src/account';
 import { SettingsProvider, useSettings } from './src/settings';
 import { confirmAction } from './src/confirm';
 import { SavedGame, clearGame, loadGame, saveGame } from './src/storage';
@@ -99,7 +100,10 @@ export default function App() {
     <SafeAreaProvider>
       <SettingsProvider>
         <Themed>
-          <Game />
+          {/* The website's sign-in and "Support this app" (server/kit); off on a phone, and on a site without the api/. */}
+          <AccountProvider>
+            <Game />
+          </AccountProvider>
         </Themed>
       </SettingsProvider>
     </SafeAreaProvider>

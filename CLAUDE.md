@@ -21,7 +21,8 @@ the layout.
   dark, following `VISUAL_STYLE.md` — and never in a component:
   `__tests__/theme.test.ts` fails on a colour literal anywhere else and measures
   every pairing the UI draws against WCAG in both palettes.
-- `npm test` runs the jest-expo unit tests, `npm run typecheck` runs tsc, and
+- `npm test` runs the kit's self-test and `server/api.test.mjs` with `node --test`, then the
+  jest-expo unit tests; `npm run typecheck` runs tsc, and
   `npm run check` is the gate before a push. `npm run test:e2e` builds the website and plays
   it in Chromium (see Website below); CI runs it after the export.
 - A save is untrusted input, and its counts are part of its shape. Everything
@@ -65,7 +66,7 @@ the layout.
 
 ## Native configuration
 
-The native config is pinned by `__tests__/appConfig.test.ts`, which runs `expo config --type introspect` and reads the merged Android manifest and resources rather than app.json alone, so app.json states every key the test pins even at its default and the two say the same thing. SDK 57 dropped the top-level `splash` block and `expo-splash-screen`'s plugin no-ops without props, so a stray top-level block is silently ignored rather than deprecated: the splash lives in `plugins`, ivory with a deep-ink `dark` variant. `userInterfaceStyle: "automatic"` reaches Android only through `expo-system-ui`, which is why it is a dependency nothing imports. The app has no network code, so `android.permission.INTERNET` is blocked along with the storage and media permissions and SYSTEM_ALERT_WINDOW (the template and expo-file-system declare the first, the template and react-native's debug manifest the last; a shipped game draws over nothing), leaving VIBRATE as the only permission granted, and `plugins/withDebugInternet.js` adds INTERNET back to `android/app/src/debug/AndroidManifest.xml` alone so a dev client can still fetch its bundle — the template's debug source set re-declares SYSTEM_ALERT_WINDOW there itself. The test drives that plugin against the SDK 57 template's debug manifest verbatim, and scans every AndroidManifest.xml under node_modules with no exceptions, so a dependency that declares a new permission fails the suite until it is blocked or added to `USED` with its reason. `allowBackup` is false because the records are one in-progress game (`battleshiple:savegame:v1`) and four preferences (`battleshiple.settings.v1`), worth nothing off the device. `newArchEnabled` and `android.edgeToEdgeEnabled` are gone on SDK 57 (nothing reads them; prebuild warns on the latter) and the test keeps them out. The web build is a website (see Website below): react-native-web, react-dom and @expo/metro-runtime are dependencies at the pins `expo/bundledNativeModules.json` names, and `web.bundler` is what that export uses. `app.config.js` returns app.json's config untouched unless `WEB_BASE_URL` is set, so the introspection this test runs sees app.json as written. `tsconfig` includes the `node` types so the test can read the file system; `@types/node` is a devDependency for that reason only, pinned to the Node 22 line CI runs.
+The native config is pinned by `__tests__/appConfig.test.ts`, which runs `expo config --type introspect` and reads the merged Android manifest and resources rather than app.json alone, so app.json states every key the test pins even at its default and the two say the same thing. SDK 57 dropped the top-level `splash` block and `expo-splash-screen`'s plugin no-ops without props, so a stray top-level block is silently ignored rather than deprecated: the splash lives in `plugins`, ivory with a deep-ink `dark` variant. `userInterfaceStyle: "automatic"` reaches Android only through `expo-system-ui`, which is why it is a dependency nothing imports. The app has no network code (the website's account client, `src/accountClient.web.ts`, is bundled into the web build alone; see Sign-in and the shop below), so `android.permission.INTERNET` is blocked along with the storage and media permissions and SYSTEM_ALERT_WINDOW (the template and expo-file-system declare the first, the template and react-native's debug manifest the last; a shipped game draws over nothing), leaving VIBRATE as the only permission granted, and `plugins/withDebugInternet.js` adds INTERNET back to `android/app/src/debug/AndroidManifest.xml` alone so a dev client can still fetch its bundle — the template's debug source set re-declares SYSTEM_ALERT_WINDOW there itself. The test drives that plugin against the SDK 57 template's debug manifest verbatim, and scans every AndroidManifest.xml under node_modules with no exceptions, so a dependency that declares a new permission fails the suite until it is blocked or added to `USED` with its reason. `allowBackup` is false because the records are one in-progress game (`battleshiple:savegame:v1`) and four preferences (`battleshiple.settings.v1`), worth nothing off the device. `newArchEnabled` and `android.edgeToEdgeEnabled` are gone on SDK 57 (nothing reads them; prebuild warns on the latter) and the test keeps them out. The web build is a website (see Website below): react-native-web, react-dom and @expo/metro-runtime are dependencies at the pins `expo/bundledNativeModules.json` names, and `web.bundler` is what that export uses. `app.config.js` returns app.json's config untouched unless `WEB_BASE_URL` is set, so the introspection this test runs sees app.json as written. `tsconfig` includes the `node` types so the test can read the file system; `@types/node` is a devDependency for that reason only, pinned to the Node 22 line CI runs.
 
 ## Settings
 
@@ -117,7 +118,8 @@ is read here (nested under `expo/node_modules` it resolved only by accident) and
 the `version` in `app.json`, which the contract test keeps `package.json` in step with.
 "Nothing leaves your device" is true and `appConfig.test.ts` keeps it so: it scans `src/`,
 `App.tsx`, `index.ts` and the website's `public/guard.js` for `fetch`, `XMLHttpRequest`, `WebSocket`, `expo-updates` and any
-URL but `SOURCE_URL`, and pins `Linking.openURL(SOURCE_URL)` — handed to the browser with a
+URL but `SOURCE_URL` (all but `src/accountClient.web.ts`, which it names and holds to its own
+rules: see Sign-in and the shop), and pins `Linking.openURL(SOURCE_URL)` — handed to the browser with a
 `.catch`, since Android rejects when nothing answers the intent — as the only `openURL` in the
 tree. On the board, the locked target cell is exposed as `selected`, so a screen reader is
 told which cell FIRE will act on; the game screen shows one large board, the one the turn acts on, and the other as a mini-map that is a single button named for the board it shows ("Show your fleet"), never a grid of cells, so a cell label stays unique; the shared `Segmented`
@@ -127,16 +129,18 @@ the reported quadrant.
 ## Website
 
 The web build is also a website, the art-app model: the game stays in the browser (nothing moves
-to a server, and it makes no request once loaded), and the host does the rest — headers, cache
+to a server, and the game makes no request once loaded; the page asks its own `api/config` once,
+for the optional sign-in, below), and the host does the rest — headers, cache
 rules, the not-found page, refusing every file that is not part of the site. `npm run build:web`
 (`scripts/build-web.mjs`) runs `expo export --platform web`, which copies `public/` beside the
 bundle (SDK 57 copies it whole, `.well-known/` and `.htaccess` included) and reads
 `public/index.html` as the page template; then it removes `metadata.json`, moves 404.html's and
 .htaccess's root-absolute addresses under `--base` when there is one (the bundle's go through
 `app.config.js`'s `WEB_BASE_URL` → `experiments.baseUrl`), keeps only the configuration the
-`--host` reads from the folder (`HOSTS`: `_headers` and `_redirects` for Netlify, `_headers` for
-Cloudflare Pages, `.htaccess` for Apache, none for nginx or GitHub Pages, which serves every file it
-is given; all three without `--host`), writes the policy into the built page as a `<meta>` taken
+`--host` reads from the folder (`HOSTS`: `_headers` and `_redirects` for Netlify, `_headers` and
+`_routes.json` for Cloudflare Pages, `.htaccess` for Apache, none for nginx or GitHub Pages, which
+serves every file it is given; all four without `--host`; `_routes.json` is written by the build,
+with the base path in it), writes the policy into the built page as a `<meta>` taken
 from `public/_headers`, and refuses a page that is not the template. Inside the checkout it writes
 only to `dist-web` or `dist` (`OUT_FOLDERS`), the folders `.gitignore` and the shared
 `eslint.config.js` both ignore. The policy is
@@ -155,15 +159,16 @@ also drives `build-web.mjs` in a sandbox with a stand-in exporter. Netlify and A
 rules from the published folder, so in a checkout published by mistake (their files then sit in
 `public/`) no rule of theirs fires; nginx's configuration lives outside the folder and is an
 allow-list of the site's paths (`location = /`, one regular expression, and `location /` answering
-404), so the test runs every file `git ls-files` lists through it and requires a 404 for each. Its
+404; `location ^~ /api/` goes to the API), so the test runs every file `git ls-files` lists through it and requires a 404 for each. Its
 `listen 443 ssl http2` is the form nginx 1.22 and 1.24 load (`http2 on;` is 1.25.1 and later), and
 Apache's `.htaccess` needs `AllowOverride All` and leaves `ServerTokens Prod` to the server
 configuration, which README and the file's header both say and the test holds. Every value was measured in
 Chromium with the policy sent as a response header: without `img-src 'self'` the favicon is
 refused; without the empty string's hash in `style-src` react-native-web's `<style>` element is
 refused and the game draws unstyled (it fills that element through `insertRule`, which CSP does
-not govern, so `'unsafe-inline'` is not needed); Trusted Types (`trusted-types 'none'`) hold over
-the whole flow; nothing else is loaded. Permissions-Policy lists only names Chromium recognises,
+not govern, so `'unsafe-inline'` is not needed); with `connect-src 'none'` the page's `api/config`
+is refused, so `'self'` it is, and a fetch to any other origin is still refused; Trusted Types
+(`trusted-types 'none'`) hold over the whole flow; nothing else is loaded. Permissions-Policy lists only names Chromium recognises,
 since each unknown one is a console warning the suite fails on. Referrer-Policy is
 `strict-origin-when-cross-origin`: the game's one address carries nothing private.
 
@@ -181,9 +186,51 @@ served by the hosts and by nginx's allow-list or the one host's configuration (`
 builds `--host netlify`), plants what else a published folder can hold (`metadata.json`,
 `.htaccess`) beside the site, and stages the safety net (`public/guard.js`, ES5 so the old
 browsers it is for can parse it, loaded first and synchronously: a bundle that 404s, one that
-throws, one that draws nothing within four seconds of load; and `<noscript>`).
+throws, one that draws nothing within four seconds of load; and `<noscript>`). Every page there
+asks `api/config` once and is answered 404; that one console line is excused by its address and
+counted. Then it plays the account flow with the API beside the site (below).
 `appConfig.test.ts`'s no-network scan reads `guard.js` as well. Playwright is a devDependency
 pinned to the version whose Chromium CI installs.
+
+## Sign-in and the shop
+
+The website, and only the website, can offer Sign in with Google and one "Support this app"
+payment (one-time, granting `supporter`): the owner's integrations charter, per-app functions on
+the same origin, Stripe Checkout and its webhook, web first. `server/kit/` is the shared kit, copied
+byte for byte from the canonical copy and never edited here (a change there is a request to the
+kit, made in every repository at once); it lints and type-checks under this repository's own
+ESLint and tsconfig with nothing ignored, and `npm test` runs its self-test. `server/catalogue.js`
+sells the one product; `functions/api/[[path]].js` is the Cloudflare Pages entry (three lines,
+pinned by `server/api.test.mjs`); `server/start.mjs` the Node one on 127.0.0.1:8788, behind
+`deploy/nginx.conf`'s `location ^~ /api/`, whose one `add_header` is the server block's HSTS line
+(`website.test.ts` allows exactly that location an `add_header`). `server/package.json` says
+`"type": "module"`, without which Node warns on every start. `scripts/build-web.mjs` writes
+`_routes.json` (`<base>/api/*`) for Cloudflare Pages; the other hosts refuse it. `server/fakes.mjs`
+is a fake Google and Stripe for the tests, handed to the kit through `createApp({ fetch })`, never
+through a variable that names another host.
+
+On the page: `src/accountModel.ts` (pure: reads `api/config` and `api/me` field by field, the
+words, the poll after Checkout), `src/accountClient.web.ts` (the one module that makes a request,
+to the page's own `api/` only, and leaves only for `api/auth/google/start` or an address starting
+`https://checkout.stripe.com/`), its native twin `src/accountClient.ts` (inert: "not configured",
+opens nothing) and `src/account.tsx` (the provider: off from the first frame on a phone; on the web
+`api/config` once, and anything but a sign-in that is on leaves it off for good). Settings draws an
+Account card and the support card between Reset to defaults and About only when `api/config` says
+so; the confirmation of Delete account is `confirmAction`. What a supporter gets is
+`SUPPORTER_THANKS` in About and nothing else (`account-screen.test.tsx` holds that only
+SettingsScreen reads `supported`). About's privacy sentence is `PRIVACY` on a phone and on a site
+with no sign-in, `PRIVACY_WITH_ACCOUNT` where sign-in is on (both in `src/about.ts`, pinned by the
+contract test). The landing notices (sign-in failed, the thanks, payment pending) are drawn on the
+menu, which is where Google and Stripe send the visitor back. Nothing about the account is stored
+on the device. `appConfig.test.ts` exempts exactly `src/accountClient.web.ts` from the no-network
+scan, pins its two fetches, its one outside address and its two navigations, and holds the twin
+inert and the module a native build resolves.
+
+The browser suite serves the built site with the kit beside it (`e2e/serve.mjs`'s `api`, as
+Cloudflare Pages runs the function) and plays the whole flow under the site's policy. Playwright
+routes no redirect's target, so the kit's 302 from `api/auth/google/start` reaches the browser as a
+`Refresh` to Google's authorize URL, which `page.route` then answers with Google's redirect to the
+callback; Checkout is answered the same way, and the signed webhook is posted from Node.
 
 ## Conventions
 

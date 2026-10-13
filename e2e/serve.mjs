@@ -1,7 +1,11 @@
 // The test host for the built site. It serves the folder under a sub-path, the way a GitHub Pages
 // project site is served, and answers the way Netlify and Cloudflare Pages read the site's own
 // _headers and _redirects, so the browser suite plays the game under the headers exactly as that
-// file writes them. Test tooling only: it is never published, and it listens on loopback alone.
+// file writes them. Given an `api`, it also runs the site's sign-in and shop API for
+// `<base>/api/*` the way Cloudflare Pages runs functions/api/[[path]].js (_routes.json): before
+// the static files and the _redirects rules, and with none of _headers' headers, which Cloudflare
+// does not apply to a Function's response (the API sends its own). Test tooling only: it is never
+// published, and it listens on loopback alone.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -79,15 +83,17 @@ export function headersFor(rules, p) {
  * outside the base also lands in `outside`, and a path two header rules both set a header for in
  * `twice`. With `headers: false` it sends nothing from _headers, as GitHub Pages sends nothing.
  * `override(sitePath)` may answer a path instead of the folder (the suite stages a broken bundle
- * that way): it returns `{ status, body, type }` or nothing.
+ * that way): it returns `{ status, body, type }` or nothing. `api`, a node:http request listener,
+ * answers everything under `<base>/api/`, each request recorded in `apiRequests`.
  */
-export function serveSite({ root, base, headers: sendHeaders = true, override = () => undefined }) {
+export function serveSite({ root, base, headers: sendHeaders = true, override = () => undefined, api = null }) {
   const site = path.resolve(root);
   const headerRules = parseHeaders(fs.readFileSync(path.join(site, '_headers'), 'utf8'));
   const redirectRules = parseRedirects(fs.readFileSync(path.join(site, '_redirects'), 'utf8'));
   const outside = [];
   const twice = [];
   const requests = [];
+  const apiRequests = [];
 
   const send = (res, sitePath, status, body, type) => {
     const { headers, twice: doubled } = headersFor(sendHeaders ? headerRules : [], sitePath);
@@ -109,6 +115,11 @@ export function serveSite({ root, base, headers: sendHeaders = true, override = 
     if (!pathname.startsWith(`${base}/`)) {
       outside.push(pathname);
       res.writeHead(404, { 'Content-Type': 'text/plain' }).end('outside the site');
+      return;
+    }
+    if (api && pathname.startsWith(`${base}/api/`)) {
+      apiRequests.push(`${req.method} ${pathname}`);
+      api(req, res);
       return;
     }
     let sitePath;
@@ -135,7 +146,7 @@ export function serveSite({ root, base, headers: sendHeaders = true, override = 
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
-      resolve({ server, origin: `http://127.0.0.1:${port}`, url: `http://127.0.0.1:${port}${base}/`, outside, twice, requests });
+      resolve({ server, origin: `http://127.0.0.1:${port}`, url: `http://127.0.0.1:${port}${base}/`, outside, twice, requests, apiRequests, hasApi: api !== null });
     });
   });
 }

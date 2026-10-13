@@ -74,9 +74,11 @@ against easy and normal, and a genuine trade-off against hard.
 From the menu: **Theme** (system, light or dark), **Vibration** on or off, **Reduce
 motion** (system, on or off — drops the splash ripple; the reported quadrant stays marked),
 **Reset to defaults**, and an About card with the version and licence. The computer skill you pick on the menu is kept
-between launches. Nothing leaves your device: the app has no network code. In a browser the
+between launches. Nothing leaves your device: the phone app has no network code. In a browser the
 Vibration row is drawn off and cannot be changed, and says why: a browser cannot vibrate for the
-game.
+game. On a website whose host runs the sign-in API (see [Sign-in and the shop](#sign-in-and-the-shop)),
+Settings also has an **Account** card (Sign in with Google, Sign out, Delete account) and a
+**Support this app** card, and About says what signing in and paying tell the site.
 
 ## Saved games
 
@@ -200,7 +202,10 @@ npm run web
 
 The game is also a website: the same app, drawn by react-native-web, played entirely in the
 browser. Nothing moves to a server — the host only hands out the files and the headers around
-them, and the game makes no request once it has loaded (its policy says `connect-src 'none'`).
+them, and the game itself makes no request once it has loaded. The page asks the site's own
+`api/config` once, for the optional sign-in and shop (see [Sign-in and the shop](#sign-in-and-the-shop));
+on a host that runs no API that is one 404 and nothing more, and its policy allows a connection
+to the site's own origin and nowhere else (`connect-src 'self'`).
 
 ```bash
 npm run build:web -- --host netlify                                  # the site, for the root of a domain
@@ -212,13 +217,13 @@ page (`public/index.html` with the policy written in), the safety net (`guard.js
 stylesheet, the not-found page, `robots.txt`, `.well-known/security.txt`, and the configuration
 the host named by `--host` reads from the folder (`github-pages`, `netlify`, `cloudflare`,
 `apache` or `nginx`), and no other host's: GitHub Pages serves every file it is given, the
-configurations included. Without `--host` the folder carries all three. Never publish the
+configurations included. Without `--host` the folder carries all four. Never publish the
 repository itself.
 
 | Host | `--host` | Reads |
 | --- | --- | --- |
 | Netlify | `netlify` | `_headers` and `_redirects`, from the published folder |
-| Cloudflare Pages | `cloudflare` | `_headers`, from the published folder (it does not apply the 404 rules `_redirects` holds) |
+| Cloudflare Pages | `cloudflare` | `_headers` and `_routes.json`, from the published folder (it does not apply the 404 rules `_redirects` holds); `functions/` from the repository |
 | Apache | `apache` | `.htaccess`, from the published folder, where the server configuration allows it: see below |
 | nginx | `nginx` | `deploy/nginx.conf`, included from the `http {}` block |
 | GitHub Pages | `github-pages` | nothing: see below |
@@ -228,7 +233,7 @@ of them drifts:
 
 | Header | Value, and why |
 | --- | --- |
-| Content-Security-Policy | `default-src 'none'`, then only what the game was measured to load in Chromium: its own scripts, its own stylesheet plus the empty `<style>` element react-native-web fills (allowed by the empty string's hash, not `'unsafe-inline'`), its own favicon; no connections, no forms, no plugins, no `<base>`, no framing (`frame-ancestors 'none'`), and Trusted Types, so nothing writes HTML from a string |
+| Content-Security-Policy | `default-src 'none'`, then only what the game was measured to load in Chromium: its own scripts, its own stylesheet plus the empty `<style>` element react-native-web fills (allowed by the empty string's hash, not `'unsafe-inline'`), its own favicon; connections to the site's own origin alone (`connect-src 'self'`, for the sign-in and shop `api/`); no forms, no plugins, no `<base>`, no framing (`frame-ancestors 'none'`), and Trusted Types, so nothing writes HTML from a string |
 | X-Frame-Options | `DENY`, the same refusal to be framed for browsers that predate `frame-ancestors` |
 | X-Content-Type-Options | `nosniff` |
 | Referrer-Policy | `strict-origin-when-cross-origin`: the game's one address carries nothing private |
@@ -238,7 +243,8 @@ of them drifts:
 | Cache-Control | a year, immutable, for the bundle (its name carries a hash of its contents); `no-cache` for everything else |
 
 The hosts also refuse the files in the published folder that are not part of the site (the
-hosts' own configurations, and the `metadata.json` a plain `npx expo export` writes), answer a
+hosts' own configurations, Cloudflare Pages' `_routes.json` among them, and the `metadata.json` a
+plain `npx expo export` writes), answer a
 missing address and a folder with the game's own not-found page, turn off listings, and redirect
 HTTP to HTTPS (Apache, nginx). Netlify and Apache read their rules from the published folder, so
 those rules cover that folder and nothing else; nginx reads its configuration from outside it and
@@ -287,6 +293,60 @@ Before a launch: build with the base the site is served under; check the headers
 `curl -I https://<host>/` against the table above; and renew `.well-known/security.txt` before
 its `Expires` date (the unit tests fail once it has passed).
 
+### Sign-in and the shop
+
+The website can offer **Sign in with Google** and one **Support this app** payment (one-time,
+through Stripe Checkout), answered by a small API on the site's own origin under `api/`:
+`server/kit/` (the same files, byte for byte, in every app that carries them; its own
+`server/kit/README.md` is the full setup guide) with this app's `server/catalogue.js`. It is
+**off until the owner sets its keys**. With none set, and on GitHub Pages or Netlify, where no API
+runs, the page's one `GET api/config` is a 404 or reports nothing on, nothing is drawn, stored or
+asked again, and the game looks and behaves exactly as above. The phone apps never ask: they keep
+INTERNET blocked and sell nothing (the App Store and Google Play require their own in-app
+purchase, which is a later decision).
+
+Where it is on, Settings gains an **Account** card (Sign in with Google; signed in, who you are,
+Sign out and Delete account, which asks first) and a **Support this app** card (its price, then
+Buy, or Sign in to buy, and Owned once paid). Buy leaves for Stripe's own Checkout page; the page
+never loads a Google or Stripe script. Back on the menu, a line says the payment arrived (or that
+it can take a minute), or that a sign-in did not complete.
+
+What a supporter gets is a line of thanks in About: *Thank you for supporting Battleshiple.*
+Nothing else in the game changes. That line is drawn from what the site's `api/me` reports; a
+visitor who edits the page can draw it for themselves, which unlocks nothing, since there is
+nothing to unlock. The record of a payment is the server's, and only Stripe's signed webhook
+grants it.
+
+What leaves the device on such a site, and only when the visitor signs in or pays: Google tells
+the site an account id and (when Google has verified it) an email address; Stripe handles the
+payment. The site keeps the account id, what was bought and Stripe's customer id, and the email
+in the session record alone (thirty days at most, deleted on sign-out). Delete account removes the
+account, its sessions and the record of the payment; the payment itself stays with Stripe. The
+game itself, its save and its settings never leave the browser.
+
+**Cloudflare Pages** (the reference host) runs `functions/api/[[path]].js`, the kit's three-line
+entry; `npm run build:web -- --host cloudflare` writes `_routes.json`
+(`{"version":1,"include":["/api/*"],"exclude":[]}`), so only `api/*` invokes the function and every
+static file is served as it is. Cloudflare's documentation says `_headers` is not applied to a
+Function's responses and `_redirects` not to requests a Function serves: the API sends its own
+headers (a `default-src 'none'` policy, `no-referrer`, `nosniff`), and the site's policy stays on
+the static files. Pages does not apply the 404 rules `_redirects` holds anyway, and answers a
+missing static path with the site's `404.html`. Bind a KV namespace as `KIT_STORE`.
+
+**Self-hosted**: `KIT_DATA_DIR=/var/lib/battleshiple-api node server/start.mjs` listens on
+127.0.0.1:8788 and keeps one file per record under that directory (outside the web root, one
+process per directory). `deploy/nginx.conf` sends `location ^~ /api/` to it (a 502 while it is not
+running, and the page draws neither). Apache's `.htaccess` cannot proxy: in the virtual host,
+`ProxyPass "/api/" "http://127.0.0.1:8788/api/"` with mod_proxy and mod_proxy_http.
+
+The variables, never in the repository and never sent to the page: `APP_URL` (the site's address
+with its trailing slash), `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (a Google
+"Web application" client whose redirect URI is `APP_URL` + `api/auth/google/callback`),
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (the endpoint `APP_URL` + `api/webhooks/stripe`) and
+`STRIPE_PRICE_SUPPORTER` (the one-time Price of "Support this app"). Sign-in turns on with the first
+four; the shop with all seven. Give the API an origin of its own (see "One origin per app" above):
+every page on the origin can act as the signed-in visitor through `api/`.
+
 ### Native builds
 
 The project uses [EAS Build](https://docs.expo.dev/build/introduction/):
@@ -302,7 +362,7 @@ eas build -p android --profile preview
 ```bash
 npm run lint               # ESLint (Expo's preset)
 npm run typecheck          # TypeScript
-npm test                   # Jest (engine unit tests + UI smoke tests)
+npm test                   # the kit's self-test and the API's tests (node --test), then Jest
 npm run test:conventions   # the conventions shared with the sibling repositories
 npm run check              # all of the above: the gate before a push
 npm run test:e2e           # the website, built under /battleshiple/ and played in Chromium
@@ -314,7 +374,9 @@ npm run sim                # the balance simulation behind the numbers above
 `_headers` writes, and plays it in Chromium: the menu, the settings, a battle against the
 computer, a reload that resumes it, the winning shot, a browser whose storage another app has
 filled (the game says so and catches up once there is room, with the next move or with none when
-another page frees it), two tabs sharing that storage, the Pass & Play handoff. It fails on any
+another page frees it), two tabs sharing that storage, the Pass & Play handoff, and, with the
+sign-in API served beside the site and fakes of Google and Stripe, signing in, paying, Stripe's
+signed webhook, the thanks in About, signing out and deleting the account. It fails on any
 policy violation, page error, console error or request outside the site, and also checks every
 response's headers, that the policy is enforced rather than only sent, the not-found page, that
 every file the build wrote is part of the site (and served by nginx's allow-list) or Netlify's
@@ -372,6 +434,9 @@ src/settings.tsx         preferences (theme, vibration, reduce motion, computer 
 src/validate.ts          clamps the stored preferences to values the app knows
 src/motion.ts            reduce-motion resolution (setting, device, web)
 src/about.ts             what the About card says, free of React Native
+src/account*.ts(x)       the website's sign-in and "Support this app": the model, the web client
+                         (accountClient.web.ts, the one module that makes a request), its inert
+                         native twin, and the screens' provider
 src/confirm.ts           a confirmation that works on the web as well as a device
 src/ui/theme/            palettes, type scale, contrast checks, ThemeProvider
 src/ui/                  React Native components and screens
@@ -388,6 +453,9 @@ public/                  the website around the bundle, copied into every export
   robots.txt, .well-known/security.txt
 deploy/nginx.conf        the same for nginx
 scripts/build-web.mjs    builds the website into dist-web/
+server/kit/              sign in with Google, Stripe Checkout and its webhook (shared, never edited here)
+server/catalogue.js      what the website sells: "Support this app"
+server/start.mjs         the API on a host of its own; functions/api/[[path]].js, on Cloudflare Pages
 e2e/                     the website suite: a test host that reads _headers, and the run
 ```
 

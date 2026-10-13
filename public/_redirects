@@ -1,13 +1,17 @@
 # Netlify: the files in the published folder that are not part of the site answer the not-found
-# page: the hosts' own configurations, and metadata.json, which a plain `npx expo export` writes
-# (scripts/build-web.mjs removes it). `404!` rather than `404`: a plain rule is shadowed by a file
-# at the same path, and these are files that can be there. Netlify never serves _headers or
+# page: the hosts' own configurations (Cloudflare Pages' _routes.json, which scripts/build-web.mjs
+# writes, among them), and metadata.json, which a plain `npx expo export` writes (the build
+# removes it). `404!` rather than `404`: a plain rule is shadowed by a file at the same path, and
+# these are files that can be there. Netlify never serves _headers or
 # _redirects itself; they are listed so the three configurations refuse the same paths. Netlify
 # reads this file from the published folder, so it covers that folder and nothing else: publish
 # the folder the build writes, never the repository (only nginx, whose configuration lives
 # outside the folder, also refuses a checkout published by mistake). Cloudflare Pages does not
-# apply 404 rules, so `npm run build:web -- --host cloudflare` leaves this file out.
+# apply 404 rules, so `npm run build:web -- --host cloudflare` leaves this file out. Netlify runs
+# no Function of this site, so its api/ is a 404 like any other missing path, and the page draws
+# no sign-in and no shop.
 /_headers        /404.html  404!
 /_redirects      /404.html  404!
 /.htaccess       /404.html  404!
+/_routes.json    /404.html  404!
 /metadata.json   /404.html  404!

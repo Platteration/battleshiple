@@ -1,7 +1,9 @@
 import Constants from 'expo-constants';
-import React from 'react';
+import React, { useState } from 'react';
 import { Linking, Platform, Switch, Text, View } from 'react-native';
-import { APP_NAME, LICENCE, PRIVACY, SOURCE_URL, TAGLINE, appVersion } from '../../about';
+import { APP_NAME, LICENCE, PRIVACY, PRIVACY_WITH_ACCOUNT, SOURCE_URL, SUPPORTER_THANKS, TAGLINE, appVersion } from '../../about';
+import { useAccount } from '../../account';
+import { ACCOUNT_NOTES, WORDS, formatPrice } from '../../accountModel';
 import { confirmAction } from '../../confirm';
 import { ReduceMotionSetting, ThemeSetting, useSettings } from '../../settings';
 import { Button } from '../components/Button';
@@ -17,7 +19,11 @@ import { makeStyles, radius, spacing, useTheme } from '../theme';
  */
 export const WEB_VIBRATION_HINT = 'A browser cannot vibrate for the game; vibration is in the iOS and Android apps.';
 
-/** The rows, in order, as the contract test pins them. */
+/**
+ * The rows, in order, as the contract test pins them. On a website whose api/ offers sign-in
+ * (server/kit), an Account card and, when the site sells it, a "Support this app" card come
+ * between Reset to defaults and About; a phone, and a site without the api/, never draws them.
+ */
 export const SETTINGS_ROWS = ['Theme', 'Vibration', 'Reduce motion', 'Reset to defaults', 'About'] as const;
 
 const THEMES: { value: ThemeSetting; label: string }[] = [
@@ -38,9 +44,16 @@ interface Props {
 
 export function SettingsScreen({ onBack }: Props) {
   const { settings, update, reset } = useSettings();
+  const account = useAccount();
   const styles = useStyles();
   const { palette: p } = useTheme();
   const web = Platform.OS === 'web';
+  /** What the Account card says when signing out or deleting did not work. */
+  const [accountNote, setAccountNote] = useState<string | null>(null);
+  /** ...and what the shop card says when Buy did not leave for Checkout. */
+  const [shopNote, setShopNote] = useState<string | null>(null);
+  const product = account.supporter;
+  const price = product?.price ? formatPrice(product.price) : null;
 
   const onReset = () =>
     // Confirmed because a reset cannot be undone from inside the app; it
@@ -51,6 +64,17 @@ export function SettingsScreen({ onBack }: Props) {
       cancelLabel: 'Cancel',
       confirmLabel: 'Reset',
       onConfirm: reset,
+    });
+
+  const onDeleteAccount = () =>
+    // Confirmed because the account and the record of the payment cannot be brought back from
+    // here. The payment itself stays with Stripe.
+    confirmAction({
+      title: ACCOUNT_NOTES.deleteTitle,
+      message: ACCOUNT_NOTES.deleteBody,
+      cancelLabel: ACCOUNT_NOTES.deleteCancel,
+      confirmLabel: ACCOUNT_NOTES.deleteConfirm,
+      onConfirm: () => void account.deleteAccount().then(setAccountNote),
     });
 
   return (
@@ -86,6 +110,38 @@ export function SettingsScreen({ onBack }: Props) {
 
       <Button title="Reset to defaults" variant="ghost" onPress={onReset} />
 
+      {account.signInOn && (
+        <View style={styles.card}>
+          <Text style={styles.h2}>{WORDS.section}</Text>
+          {account.user ? (
+            <>
+              <Text style={styles.p}>{account.user.email ? WORDS.signedInAs(account.user.email) : WORDS.signedIn}</Text>
+              <Button title={WORDS.signOut} variant="secondary" onPress={() => void account.signOut().then(setAccountNote)} />
+              <Button title={WORDS.deleteAccount} variant="ghost" onPress={onDeleteAccount} />
+            </>
+          ) : (
+            <Button title={WORDS.signIn} variant="secondary" onPress={account.signIn} />
+          )}
+          {accountNote && <Text style={styles.hint}>{accountNote}</Text>}
+        </View>
+      )}
+
+      {product && (
+        <View style={styles.card}>
+          <Text style={styles.h2}>{product.name}</Text>
+          <Text style={styles.p}>{product.description}</Text>
+          {price && <Text style={styles.label}>{price}</Text>}
+          {account.supported ? (
+            <Text style={styles.label}>{WORDS.owned}</Text>
+          ) : account.user ? (
+            <Button title={WORDS.buy} onPress={() => void account.buySupport().then(setShopNote)} />
+          ) : (
+            <Button title={WORDS.signInToBuy} variant="secondary" onPress={account.signIn} />
+          )}
+          {shopNote && <Text style={styles.hint}>{shopNote}</Text>}
+        </View>
+      )}
+
       <View style={styles.card}>
         <Text style={styles.h2}>About</Text>
         <Text style={styles.p}>
@@ -100,7 +156,8 @@ export function SettingsScreen({ onBack }: Props) {
         >
           {LICENCE} · source
         </Text>
-        <Text style={styles.p}>{PRIVACY}</Text>
+        <Text style={styles.p}>{account.signInOn ? PRIVACY_WITH_ACCOUNT : PRIVACY}</Text>
+        {account.supported && <Text style={styles.p}>{SUPPORTER_THANKS}</Text>}
       </View>
 
       <Button title="Back to menu" variant="secondary" onPress={onBack} />

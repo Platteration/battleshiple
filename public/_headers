@@ -14,7 +14,12 @@
 #                       govern. The hash is the empty string's: without it the game draws with no
 #                       styles at all. No 'unsafe-inline'.
 #   img-src 'self'      the favicon. The boards and hulls are drawn from views, not images.
-#   connect-src 'none'  the game makes no network request: there is no network code.
+#   connect-src 'self'  the site's own api/ (server/kit, the sign-in and shop of the website, where
+#                       the host runs it): the page asks api/config once on load, and api/me,
+#                       checkout, logout and the account's deletion when someone uses them. Google
+#                       and Stripe are top-level navigations, which connect-src does not govern, and
+#                       nothing else is fetched. With 'none' the api/config request is refused, so
+#                       the sign-in and shop could never be drawn. The game itself has no network code.
 #   frame-ancestors 'none'   nothing is meant to frame the game (clickjacking).
 #   require-trusted-types-for 'script'; trusted-types 'none'   nothing writes HTML from a string.
 #   No font-src, media-src, worker-src or manifest-src: the game uses the platform's own fonts,
@@ -26,7 +31,7 @@
 # web). Names Chromium does not recognise are left out, since each is a console warning.
 
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

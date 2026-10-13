@@ -27,7 +27,10 @@ responses, user-supplied text rendered into a page). That includes the website
 the web build is published as: the page, its Content-Security-Policy and other
 response headers, and the hosts' rules that refuse files outside the site
 (`public/_headers`, `public/_redirects`, `public/.htaccess`,
-`deploy/nginx.conf`).
+`deploy/nginx.conf`), and the website's optional sign-in and shop API: sign in
+with Google, Stripe Checkout and its webhook (`server/`, `functions/`, and the
+page's `src/accountClient.web.ts`). The API is off until its keys are set; the
+phone apps never call it.
 
 Out of scope: vulnerabilities in third-party dependencies that are already
 public and have an upstream fix, findings that require an attacker to already

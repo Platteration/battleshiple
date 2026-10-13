@@ -9,6 +9,11 @@
 # this file sets Options. The version in Apache's Server header is the server configuration's to
 # turn off (`ServerTokens Prod`): this file cannot. And it covers the folder it is in and nothing
 # else, so publish the folder the build writes, never the repository.
+#
+# The website's sign-in and shop API (server/kit, `node server/start.mjs` on 127.0.0.1:8788) cannot
+# be proxied from here: mod_proxy is server configuration. In the virtual host, with mod_proxy and
+# mod_proxy_http: ProxyPass "/api/" "http://127.0.0.1:8788/api/" (README, "Sign-in and the shop").
+# Without it api/ is a 404 here, and the page draws no sign-in and no shop.
 
 Options -Indexes
 ServerSignature Off
@@ -33,7 +38,7 @@ ErrorDocument 403 /404.html
   # never serve a dotfile (this file above all), except /.well-known/
   RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
   # the files in the folder that are not part of the site
-  RewriteRule ^(_headers|_redirects|metadata\.json)$ - [R=404,L]
+  RewriteRule ^(_headers|_redirects|_routes\.json|metadata\.json)$ - [R=404,L]
   # a folder with no page of its own is a 404, not a 403 that hints at a listing
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteCond %{REQUEST_FILENAME}/index.html !-f
@@ -41,7 +46,7 @@ ErrorDocument 403 /404.html
 </IfModule>
 
 <IfModule mod_headers.c>
-  Header always set Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'"
+  Header always set Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'"
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"

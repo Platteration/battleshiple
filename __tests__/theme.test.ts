@@ -80,6 +80,8 @@ function pairings(p: Palette): [string, string, string, number][] {
     ['secondary ink on cards', p.ink.secondary, p.surface.raised, TEXT_MIN],
     ['text on the primary action', p.ink.onAccent, p.accent.fill, TEXT_MIN],
     ['accent text on paper', p.accent.text, p.surface.base, TEXT_MIN],
+    // The cards' headings (About, and on the website Account and the support card).
+    ['accent text on cards', p.accent.text, p.surface.raised, TEXT_MIN],
     ['danger text on paper', p.signal.danger, p.surface.base, TEXT_MIN],
     ['ready text on cards', p.signal.success, p.surface.raised, TEXT_MIN],
     ['coordinates on paper', p.board.label, p.surface.base, TEXT_MIN],

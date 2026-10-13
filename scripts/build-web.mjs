@@ -19,6 +19,9 @@
 //     sends no headers of its own. The template does not carry it, because `expo start --web`
 //     serves the template too and the development server needs a WebSocket and HTML written
 //     from strings, both of which the policy refuses;
+//   - writes _routes.json, which tells Cloudflare Pages to run the site's one Function
+//     (functions/api/[[path]].js, the sign-in and shop API of server/kit) for `<base>/api/*` and
+//     for nothing else, so a static file never invokes it;
 //   - removes metadata.json, the exporter's manifest for EAS Update, which the site never loads,
 //     and the configurations the --host does not read;
 //   - refuses to finish when the page is not the one public/index.html describes (a later SDK
@@ -45,21 +48,32 @@ export const OUT_FOLDERS = ['dist-web', 'dist'];
 /** Every file the site is made of besides the bundle and the favicon, whichever host it is for. */
 export const SITE_FILES = ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt'];
 
-/** The hosts' configurations public/ holds, each read from the published folder by its host. */
-export const HOST_FILES = ['_headers', '_redirects', '.htaccess'];
+/**
+ * The hosts' configurations, each read from the published folder by its host: the three public/
+ * holds, and _routes.json, which this script writes because it names the base path.
+ */
+export const HOST_FILES = ['_headers', '_redirects', '.htaccess', '_routes.json'];
 
 /**
  * What each host reads from the published folder. nginx reads deploy/nginx.conf, from outside it,
  * and GitHub Pages reads nothing (the pages carry the policy as a <meta>). Cloudflare Pages reads
- * _headers, and does not apply a 404 rule, which is all _redirects holds.
+ * _headers and _routes.json, and does not apply a 404 rule, which is all _redirects holds.
  */
 export const HOSTS = {
   'github-pages': [],
   netlify: ['_headers', '_redirects'],
-  cloudflare: ['_headers'],
+  cloudflare: ['_headers', '_routes.json'],
   apache: ['.htaccess'],
   nginx: [],
 };
+
+/**
+ * Cloudflare Pages' _routes.json for a site under `base` ('' at the root of its domain): the
+ * site's Function runs for the API's paths alone, and every other request is a static file.
+ */
+export function routesFor(base) {
+  return `${JSON.stringify({ version: 1, include: [`${base}/api/*`], exclude: [] })}\n`;
+}
 
 /** The Content-Security-Policy the `/*` rule of a _headers file gives every path. */
 export function headerPolicy(headersText) {
@@ -166,6 +180,7 @@ function build({ base, out: outArg, host }) {
   if (run.status !== 0) throw new Error(`expo export exited with ${run.status}`);
 
   fs.rmSync(path.join(out, 'metadata.json'), { force: true });
+  fs.writeFileSync(path.join(out, '_routes.json'), routesFor(base));
   for (const file of [...SITE_FILES, ...HOST_FILES]) if (!fs.existsSync(path.join(out, file))) throw new Error(`the site has no ${file}`);
   for (const file of HOST_FILES) if (!keep.includes(file)) fs.rmSync(path.join(out, file));
   for (const file of ['404.html', ...(keep.includes('.htaccess') ? ['.htaccess'] : [])]) {

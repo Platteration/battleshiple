@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Difficulty, FLEET, GameMode, SHIP_CLASSES } from '../../engine';
+import { AccountNotice } from '../components/AccountNotice';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { OPPONENTS } from '../opponents';
@@ -42,6 +43,8 @@ export function HomeScreen({ difficulty, onDifficultyChange, loaded, onStart, on
           <Text style={styles.noticeText}>{notice}</Text>
         </View>
       )}
+
+      <AccountNotice />
 
       {resume && (
         <View style={styles.resume}>

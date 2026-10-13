@@ -101,7 +101,7 @@ const SITE_PATHS = ['/', '/index.html', '/404.html', '/guard.js', '/site.css', '
  * README, say) could only fire in a folder no build writes: in a checkout published by mistake
  * their configurations sit in public/, where no host reads them.
  */
-const REFUSED = ['/_headers', '/_redirects', '/.htaccess', '/metadata.json'];
+const REFUSED = ['/_headers', '/_redirects', '/.htaccess', '/_routes.json', '/metadata.json'];
 
 /** Measured in Chromium with the game played end to end under each one (see public/_headers). */
 const POLICY = [
@@ -109,7 +109,9 @@ const POLICY = [
   "script-src 'self'",
   "style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
   "img-src 'self'",
-  "connect-src 'none'",
+  // The site's own api/ (server/kit), where the host runs it: measured, 'none' refuses the page's
+  // GET api/config, so the sign-in and shop could never be drawn.
+  "connect-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
   "object-src 'none'",
@@ -179,17 +181,32 @@ describe('the response headers', () => {
     for (const p of served) expect([p, fromHeadersFile(p)['Cache-Control']]).toEqual([p, 'no-cache']);
   });
 
-  it('are set in the nginx server block, never in a location, which would drop the rest', () => {
-    // A location that has an add_header of its own inherits none of the server block's.
+  it("are set in the nginx server block, never in a location but the API's, which would drop the rest", () => {
+    // A location that has an add_header of its own inherits none of the server block's. The one
+    // exception is `location ^~ /api/` (server/kit's README): the API sends its own headers, and
+    // one add_header there, the server block's Strict-Transport-Security line as written, is what
+    // keeps the site's from being sent beside them.
     let depth = 0;
+    let location: string | null = null;
     let inLocation = 0;
+    const inApi: string[] = [];
     for (const line of NGINX.split('\n').map((l) => l.replace(/#.*/, ''))) {
-      if (/^\s*location\b/.test(line)) inLocation = depth + 1;
-      if (/\badd_header\b/.test(line)) expect([line.trim(), inLocation > 0 && depth >= inLocation]).toEqual([line.trim(), false]);
+      if (/^\s*location\b/.test(line)) {
+        inLocation = depth + 1;
+        location = line.trim();
+      }
+      if (/\badd_header\b/.test(line)) {
+        const inside = inLocation > 0 && depth >= inLocation;
+        if (inside && location === 'location ^~ /api/ {') inApi.push(line.trim());
+        else expect([line.trim(), inside]).toEqual([line.trim(), false]);
+      }
       depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
       if (inLocation && depth < inLocation) inLocation = 0;
     }
-    expect((NGINX.match(/^\s*add_header /gm) ?? []).length).toBe(9);
+    const hsts = NGINX.match(/^ {2}add_header Strict-Transport-Security .*$/gm);
+    expect(hsts).toHaveLength(1);
+    expect(inApi).toEqual([hsts![0]!.trim()]); // one match, checked just above
+    expect((NGINX.match(/^\s*add_header /gm) ?? []).length).toBe(10);
   });
 
   it('deny every feature a page can ask for: the game uses none of them', () => {
@@ -252,15 +269,19 @@ describe('the Content-Security-Policy', () => {
 describe("what the hosts refuse: the hosts' configurations, metadata.json, and for nginx everything not the site", () => {
   /**
    * nginx answers a path from the folder only through the locations that serve: `location = /`
-   * and the one regular expression of the site's paths. Everything else falls to `location /`,
-   * which answers 404. The test below holds the file to exactly those three locations, so this
-   * reader is the whole of what nginx would do.
+   * and the one regular expression of the site's paths. `location ^~ /api/` sends what is under
+   * /api/ to the API (the longest matching prefix carrying `^~` wins over every regular
+   * expression), neither served from the folder nor refused. Everything else falls to
+   * `location /`, which answers 404. The test below holds the file to exactly those four
+   * locations, so this reader is the whole of what nginx would do.
    */
+  const nginxProxies = (p: string) => p.startsWith('/api/') && /^\s*location \^~ \/api\/ \{\s*proxy_pass http:\/\/127\.0\.0\.1:8788;$/m.test(NGINX);
   const nginxServes = (p: string) =>
-    (p === '/' && /^\s*location = \/ \{\s*try_files \/index\.html =404;\s*\}/m.test(NGINX)) ||
+    !nginxProxies(p) &&
+    ((p === '/' && /^\s*location = \/ \{\s*try_files \/index\.html =404;\s*\}/m.test(NGINX)) ||
     [...NGINX.matchAll(/^\s*location ~ (\S+) \{\s*try_files \$uri =404;\s*\}/gm)].some((m) => new RegExp(m[1]!).test(p)) || // the group is required
-    !/^\s*location \/ \{\s*return 404;\s*\}/m.test(NGINX);
-  const nginxRefuses = (p: string) => !nginxServes(p);
+      !/^\s*location \/ \{\s*return 404;\s*\}/m.test(NGINX));
+  const nginxRefuses = (p: string) => !nginxServes(p) && !nginxProxies(p);
   /** Apache: every `RewriteRule <regex> - [R=404,L]` with no condition before it, against the path less its slash. */
   const apacheRefuses = (p: string) => {
     const lines = HTACCESS.split('\n');
@@ -294,7 +315,7 @@ describe("what the hosts refuse: the hosts' configurations, metadata.json, and f
 
   it('name, on Netlify and Apache, only files the published folder can hold', () => {
     // A rule for anything else can never fire: these two read their rules from the folder itself.
-    const canHold = new Set(['_headers', '_redirects', '.htaccess', 'metadata.json']);
+    const canHold = new Set(['_headers', '_redirects', '.htaccess', '_routes.json', 'metadata.json']);
     const netlify = REDIRECTS.split('\n')
       .filter((l) => l.trim() && !l.trimStart().startsWith('#'))
       .map((l) => l.trim().split(/\s+/)[0]!.slice(1)); // a rule line has a from
@@ -316,13 +337,31 @@ describe("what the hosts refuse: the hosts' configurations, metadata.json, and f
     expect(fs.existsSync(path.join(root, 'index.html'))).toBe(false);
   });
 
-  it('nginx has the three locations the reader above reads, and no other', () => {
+  it('nginx has the four locations the reader above reads, and no other', () => {
     expect(NGINX.match(/^\s*location\b.*$/gm)).toEqual([
       '  location = / {',
       expect.stringMatching(/^ {2}location ~ \^\/\(.+\)\$ \{$/),
       '  location / {',
+      '  location ^~ /api/ {',
     ]);
     expect(NGINX).toMatch(/^\s*location \/ \{\s*return 404;\s*\}/m);
+  });
+
+  it('nginx sends /api/ to the API on loopback, path unchanged, and nothing else there', () => {
+    // server/start.mjs listens on 127.0.0.1:8788. proxy_pass with no URI passes the path as it
+    // came; with one (`http://127.0.0.1:8788/`) nginx would cut /api/ off and the kit would answer
+    // every route 404. The kit never reads X-Forwarded-*, so no proxy_set_header names one.
+    const block = /^ {2}location \^~ \/api\/ \{\n([\s\S]*?)\n {2}\}$/m.exec(NGINX)?.[1];
+    expect(block?.split('\n').map((l) => l.trim())).toEqual([
+      'proxy_pass http://127.0.0.1:8788;',
+      'proxy_http_version 1.1;',
+      'proxy_set_header Connection "";',
+      'client_max_body_size 1m;',
+      'proxy_read_timeout 30s;',
+      'add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;',
+    ]);
+    expect(['/api/config', '/api/auth/google/callback', '/api/webhooks/stripe'].map(nginxProxies)).toEqual([true, true, true]);
+    expect(['/api', '/apiary', '/functions/api/[[path]].js', '/server/kit/app.js'].map(nginxProxies)).toEqual([false, false, false, false]);
   });
 
   it('nginx loads on the nginx current distributions ship, which predates `http2 on;`', () => {
@@ -601,10 +640,10 @@ describe('the build', () => {
   it.each([
     ['github-pages', []],
     ['netlify', ['_headers', '_redirects']],
-    ['cloudflare', ['_headers']],
+    ['cloudflare', ['_headers', '_routes.json']],
     ['apache', ['.htaccess']],
     ['nginx', []],
-    ['no host named', ['_headers', '_redirects', '.htaccess']],
+    ['no host named', ['_headers', '_redirects', '.htaccess', '_routes.json']],
   ])('a build for %s keeps the configuration that host reads from the folder, and no other', (host, kept) => {
     // GitHub Pages serves every file it is given: a configuration it does not read is a file
     // anyone can fetch there.
@@ -613,9 +652,26 @@ describe('the build', () => {
       const hostArgs = host === 'no host named' ? [] : ['--host', host];
       expect(box.run(...hostArgs, '--base', '/battleshiple')).toEqual({ status: 0, stderr: '' });
       const out = path.join(box.repo, 'dist-web');
-      expect(['_headers', '_redirects', '.htaccess'].filter((f) => fs.existsSync(path.join(out, f)))).toEqual(kept);
+      expect(['_headers', '_redirects', '.htaccess', '_routes.json'].filter((f) => fs.existsSync(path.join(out, f)))).toEqual(kept);
       for (const f of ['index.html', '404.html', 'guard.js', 'site.css', 'robots.txt', '.well-known/security.txt']) expect([f, fs.existsSync(path.join(out, f))]).toEqual([f, true]);
       if (kept.includes('.htaccess')) expect(fs.readFileSync(path.join(out, '.htaccess'), 'utf8')).toMatch(/^ErrorDocument 404 \/battleshiple\/404\.html$/m);
+    } finally {
+      box.done();
+    }
+  });
+
+  it.each([
+    ['/battleshiple', '/battleshiple/api/*'],
+    ['', '/api/*'],
+  ])("tells Cloudflare Pages, under the base %j, to run the site's Function for its api/ alone", (base, route) => {
+    // functions/api/[[path]].js is the sign-in and shop API (server/kit). Without _routes.json
+    // Pages generates one of its own; this one is explicit, so a static file never invokes it.
+    const box = sandbox();
+    try {
+      expect(box.run('--host', 'cloudflare', ...(base ? ['--base', base] : []))).toEqual({ status: 0, stderr: '' });
+      const routes = fs.readFileSync(path.join(box.repo, 'dist-web', '_routes.json'), 'utf8');
+      expect(routes).toBe(`{"version":1,"include":["${route}"],"exclude":[]}\n`);
+      expect(JSON.parse(routes)).toEqual({ version: 1, include: [route], exclude: [] });
     } finally {
       box.done();
     }

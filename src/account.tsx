@@ -42,6 +42,14 @@ export interface AccountApi {
   deleteAccount: () => Promise<string | null>;
   /** Leaves for Stripe's Checkout when it can; otherwise says why it did not. */
   buySupport: () => Promise<string | null>;
+  /**
+   * Whether a Sign out, Delete account or Buy is out: Settings keeps all three disabled until it
+   * has its answer, and a press of any of them meanwhile is refused before it asks anything (it
+   * answers null). One Buy at a time, and Delete account only while no Buy is out, is what the
+   * kit asks of a page (server/kit/README.md, "For the page"): on Cloudflare Pages no lock reaches
+   * another isolate, and of two presses that reach Stripe at once the second is answered 502.
+   */
+  busy: boolean;
 }
 
 const OFF: AccountApi = {
@@ -55,6 +63,7 @@ const OFF: AccountApi = {
   signOut: async () => null,
   deleteAccount: async () => null,
   buySupport: async () => null,
+  busy: false,
 };
 
 const Ctx = createContext<AccountApi>(OFF);
@@ -80,7 +89,11 @@ interface Props {
 
 export function AccountProvider({ children, client = accountClient, wait = sleep }: Props) {
   const [state, setState] = useState<State>(OFF_STATE);
+  const [busy, setBusy] = useState(false);
   const alive = useRef(true);
+  // The press that is out, read before React has drawn the controls disabled: a double click's
+  // second press, or one of the others pressed in the same moment, finds it set and asks nothing.
+  const out = useRef(false);
   // Which visitor an answer is about: moves on whenever the page learns that nobody is signed in
   // any more (sign-out, deletion, a session that ended), so the payment poll, if it is still
   // asking, does not put a line about the payment back on a page that is signed out.
@@ -155,6 +168,19 @@ export function AccountProvider({ children, client = accountClient, wait = sleep
     return ACCOUNT_NOTES[result];
   }, [client, refresh]);
 
+  /** Runs one account press at a time: see `busy`. */
+  const oneAtATime = useCallback(async (press: () => Promise<string | null>): Promise<string | null> => {
+    if (out.current) return null;
+    out.current = true;
+    setBusy(true);
+    try {
+      return await press();
+    } finally {
+      out.current = false;
+      if (alive.current) setBusy(false);
+    }
+  }, []);
+
   const api = useMemo<AccountApi>(
     () =>
       state.on
@@ -166,12 +192,13 @@ export function AccountProvider({ children, client = accountClient, wait = sleep
             notice: state.notice,
             dismissNotice: () => setState((s) => ({ ...s, notice: null })),
             signIn: () => client.signIn(),
-            signOut,
-            deleteAccount,
-            buySupport,
+            signOut: () => oneAtATime(signOut),
+            deleteAccount: () => oneAtATime(deleteAccount),
+            buySupport: () => oneAtATime(buySupport),
+            busy,
           }
         : OFF,
-    [state, client, signOut, deleteAccount, buySupport],
+    [state, busy, client, signOut, deleteAccount, buySupport, oneAtATime],
   );
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }

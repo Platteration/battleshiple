@@ -13,10 +13,11 @@
 # turn off (`ServerTokens Prod`): this file cannot. And it covers the folder it is in and nothing
 # else, so publish the folder the build writes, never the repository.
 #
-# The website's sign-in and shop API (server/kit, `node server/start.mjs` on 127.0.0.1:8788) cannot
-# be proxied from here: mod_proxy is server configuration. In the virtual host, with mod_proxy and
-# mod_proxy_http: ProxyPass "/api/" "http://127.0.0.1:8788/api/" (README, "Sign-in and the shop").
-# Without it api/ is a 404 here, and the page draws no sign-in and no shop.
+# The website's sign-in and shop API (server/kit, `node server/start.mjs` on 127.0.0.1:8788) is
+# proxied from the virtual host, not from here, with mod_proxy and mod_proxy_http:
+# ProxyPass "/api/" "http://127.0.0.1:8788/api/" and ErrorDocument 502, 503 and 504 /404.html
+# (README, "Sign-in and the shop"). Without it api/ is a 404 here, and the page draws no sign-in
+# and no shop.
 
 Options -Indexes
 ServerSignature Off

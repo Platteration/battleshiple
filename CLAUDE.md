@@ -226,7 +226,12 @@ to the page's own `api/` only, and leaves only for `api/auth/google/start` or an
 opens nothing) and `src/account.tsx` (the provider: off from the first frame on a phone; on the web
 `api/config` once, and anything but a sign-in that is on leaves it off for good). Settings draws an
 Account card and the support card between Reset to defaults and About only when `api/config` says
-so; the confirmation of Delete account is `confirmAction`. What a supporter gets is
+so; the confirmation of Delete account is `confirmAction`. Buy, Sign out and Delete account go
+out one at a time, as the kit asks of a page (its README, "For the page": on Cloudflare Pages no
+lock reaches another isolate, and of two presses that reach Stripe at once the second is answered
+502): `account.tsx` refuses a press while another is out, before React has drawn again, and
+Settings draws all three disabled meanwhile (`busy`). `account-screen.test.tsx` holds both, and
+the browser suite double-clicks Buy and counts one `POST api/checkout`. What a supporter gets is
 `SUPPORTER_THANKS` in About and nothing else (`account-screen.test.tsx` holds that only
 SettingsScreen reads `supported`). About's privacy sentence is `PRIVACY` on a phone and on a site
 with no sign-in, `PRIVACY_WITH_ACCOUNT` where sign-in is on (both in `src/about.ts`, pinned by the

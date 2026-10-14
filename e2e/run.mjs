@@ -24,7 +24,8 @@
 // Pages runs functions/api/[[path]].js), its Google and Stripe the fakes of server/fakes.mjs
 // handed to the kit as its `fetch`, and the whole flow is played under the site's policy: sign in
 // (Google's authorize page answered by page.route with the redirect back to the callback), buy
-// ("Support this app"; Checkout's page answered the same way), Stripe's signed webhook, the thanks
+// ("Support this app", with a double click that sends one press; Checkout's page answered the
+// same way), Stripe's signed webhook, the thanks
 // drawn in About, sign out, sign in again, delete the account, and a sign-in that fails.
 //
 //   npm run test:e2e        builds the site for Netlify, then runs this
@@ -808,11 +809,14 @@ try {
       await press(p, 'Settings');
       await button(p, 'Reset to defaults').waitFor();
     };
-    /** Presses `name`, waits for the page to leave through `through` and to load again at `back`. */
-    const leaveAndReturn = async (name, through, back = shop.url) => {
+    /**
+     * Presses `name` (twice at once, as a double click, with `double`), waits for the page to leave
+     * through `through` and to load again at `back`.
+     */
+    const leaveAndReturn = async (name, through, back = shop.url, double = false) => {
       const left = p.waitForRequest((r) => r.url().startsWith(through), { timeout: 15000 });
       const returned = p.waitForRequest((r) => r.url() === back && r.isNavigationRequest(), { timeout: 15000 });
-      await press(p, name);
+      await (double ? button(p, name).dblclick() : press(p, name));
       await left;
       await returned;
       await p.waitForLoadState('load');
@@ -838,9 +842,12 @@ try {
       await text('Signed in as ada@example.com').waitFor();
       assert.equal(await thanked(), false, 'signed in, nothing is held yet');
 
-      await leaveAndReturn('Buy', CHECKOUT, `${shop.url}?purchase=success`);
+      // A double click on Buy sends one press: the second finds the first out and asks nothing
+      // (on Cloudflare Pages, of two presses that reach Stripe at once the second is answered 502).
+      await leaveAndReturn('Buy', CHECKOUT, `${shop.url}?purchase=success`, true);
       await p.waitForFunction(() => location.search === '');
       assert.equal(checkouts.length, 1);
+      assert.equal(shop.apiRequests.filter((r) => r === `POST ${BASE}/api/checkout`).length, 1, 'a double click on Buy sends one press');
       // Back from Checkout nothing is granted: only Stripe's signed word grants it, and one signed
       // with another secret is refused.
       const forged = signedDelivery(fakes.paid(checkouts[0]), { secret: 'whsec_notTheEndpointsSecret000' });

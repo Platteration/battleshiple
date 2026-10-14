@@ -544,3 +544,74 @@ describe('what the provider holds to, beside the screens', () => {
     expect(calls).toEqual(['config']);
   });
 });
+
+describe('one account press at a time', () => {
+  // server/kit/README.md, "For the page": one Buy at a time, kept disabled while a press is out,
+  // and Delete account only while no Buy is out. On Cloudflare Pages, of two presses that reach
+  // Stripe at once the second is answered 502, and a deletion beside a Buy can miss its session.
+  const CONTROLS = ['Buy', 'Sign out', 'Delete account'] as const;
+  /** The pressable that holds `text`, as the screen drew it. */
+  const control = (root: ReactTestInstance, text: string) => {
+    let cur: ReactTestInstance | null = findByText(root, text);
+    while (cur && typeof cur.props.onPress !== 'function') cur = cur.parent;
+    if (!cur) throw new Error(`Nothing pressable holds "${text}"`);
+    return cur;
+  };
+  const disabled = (root: ReactTestInstance) => CONTROLS.map((t) => control(root, t).props.accessibilityState?.disabled === true);
+
+  it.each(CONTROLS)('while %s is out, all three are disabled, and a press of any of them asks nothing', async (first) => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Each fails, so the visitor stays signed in and all three are still drawn once it answers.
+    const { client, calls } = fakeClient({ me: [ADA], checkout: 'failed', signOut: false, deleteAccount: false });
+    const held: AccountClient = {
+      ...client,
+      checkout: async (product) => {
+        const result = client.checkout(product);
+        await gate;
+        return result;
+      },
+      signOut: async () => {
+        const result = client.signOut();
+        await gate;
+        return result;
+      },
+      deleteAccount: async () => {
+        const result = client.deleteAccount();
+        await gate;
+        return result;
+      },
+    };
+    const asked = () => calls.filter((c) => c === 'checkout:supporter' || c === 'signOut' || c === 'deleteAccount');
+    const root = await settingsWith(held);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.[1]?.onPress?.());
+    try {
+      expect(disabled(root)).toEqual([false, false, false]);
+      // A double click: the second press comes before React has drawn the control disabled.
+      await act(async () => {
+        const target = control(root, first);
+        target.props.onPress();
+        target.props.onPress();
+        await Promise.resolve();
+      });
+      expect(asked()).toHaveLength(1);
+      expect(disabled(root)).toEqual([true, true, true]);
+      // Pressed anyway (a disabled control's handler, called): each is refused before it asks.
+      for (const t of CONTROLS) await press(root, t);
+      expect(asked()).toHaveLength(1);
+      await act(async () => {
+        release();
+      });
+      await flush();
+      expect(disabled(root)).toEqual([false, false, false]);
+      // Answered, it can be pressed again.
+      await press(root, first);
+      await flush();
+      expect(asked()).toHaveLength(2);
+    } finally {
+      alert.mockRestore();
+    }
+  });
+});

@@ -116,8 +116,8 @@ export function SettingsScreen({ onBack }: Props) {
           {account.user ? (
             <>
               <Text style={styles.p}>{account.user.email ? WORDS.signedInAs(account.user.email) : WORDS.signedIn}</Text>
-              <Button title={WORDS.signOut} variant="secondary" onPress={() => void account.signOut().then(setAccountNote)} />
-              <Button title={WORDS.deleteAccount} variant="ghost" onPress={onDeleteAccount} />
+              <Button title={WORDS.signOut} variant="secondary" disabled={account.busy} onPress={() => void account.signOut().then(setAccountNote)} />
+              <Button title={WORDS.deleteAccount} variant="ghost" disabled={account.busy} onPress={onDeleteAccount} />
             </>
           ) : (
             <Button title={WORDS.signIn} variant="secondary" onPress={account.signIn} />
@@ -134,7 +134,7 @@ export function SettingsScreen({ onBack }: Props) {
           {account.supported ? (
             <Text style={styles.label}>{WORDS.owned}</Text>
           ) : account.user ? (
-            <Button title={WORDS.buy} onPress={() => void account.buySupport().then(setShopNote)} />
+            <Button title={WORDS.buy} disabled={account.busy} onPress={() => void account.buySupport().then(setShopNote)} />
           ) : (
             <Button title={WORDS.signInToBuy} variant="secondary" onPress={account.signIn} />
           )}

@@ -313,10 +313,12 @@ purchase, which is a later decision).
 Where it is on, Settings gains an **Account** card (Sign in with Google; signed in, who you are,
 Sign out and Delete account, which asks first) and a **Support this app** card (its price, then
 Buy, or Sign in to buy, and Owned once paid). Buy leaves for Stripe's own Checkout page; the page
-never loads a Google or Stripe script. Back on the menu, a line says the payment arrived (or that
-it can take a minute), or that a sign-in did not complete. A line about a payment is said only to
-a visitor the site reports signed in (anyone can open the address Checkout returns to), and every
-line goes when the visitor signs out or deletes the account.
+never loads a Google or Stripe script. Buy, Sign out and Delete account go out one at a time:
+while one waits for the site's answer all three are disabled, so a double click sends one Buy, and
+the page does not delete the account while a Buy of its own is on its way. Back on the menu, a
+line says the payment arrived (or that it can take a minute), or that a sign-in did not complete.
+A line about a payment is said only to a visitor the site reports signed in (anyone can open the
+address Checkout returns to), and every line goes when the visitor signs out or deletes the account.
 
 What a supporter gets is a line of thanks in About: *Thank you for supporting Battleshiple.*
 Nothing else in the game changes. That line is drawn from what the site's `api/me` reports; a
@@ -352,8 +354,17 @@ process per directory). `deploy/nginx.conf` sends `location ^~ /api/` to it. Whi
 running nginx answers there 502 (504 when it does not answer in time) with the site's not-found
 page and every header the site's files carry, and the page draws neither; a site that runs no API
 can delete that location, and `api/` then answers 404 like any other address that is not the
-site's. Apache's `.htaccess` cannot proxy: in the virtual host,
-`ProxyPass "/api/" "http://127.0.0.1:8788/api/"` with mod_proxy and mod_proxy_http.
+site's. On Apache the proxy goes in the virtual host, with mod_proxy and mod_proxy_http:
+
+```apache
+ProxyPass "/api/" "http://127.0.0.1:8788/api/"
+ErrorDocument 502 /404.html
+ErrorDocument 503 /404.html
+ErrorDocument 504 /404.html
+```
+
+With the API not running, Apache answers there 503 with the site's not-found page and its headers;
+without the `ErrorDocument` lines, with its own page and none of them.
 
 The variables, never in the repository and never sent to the page: `APP_URL` (the site's address
 with its trailing slash), `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (a Google

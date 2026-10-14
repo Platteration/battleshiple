@@ -163,8 +163,12 @@ rules from the published folder, so in a checkout published by mistake (their fi
 allow-list of the site's paths (`location = /`, one regular expression, and `location /` answering
 404; `location ^~ /api/` goes to the API), so the test runs every file `git ls-files` lists through it and requires a 404 for each. Its
 `listen 443 ssl http2` is the form nginx 1.22 and 1.24 load (`http2 on;` is 1.25.1 and later), and
-Apache's `.htaccess` needs `AllowOverride All` and leaves `ServerTokens Prod` to the server
-configuration, which README and the file's header both say and the test holds. Every value was measured in
+Apache's `.htaccess` needs `AllowOverride All` and `mod_rewrite` and `mod_headers`
+(`a2enmod rewrite headers`), and leaves `ServerTokens Prod` to the server configuration, which
+README and the file's header both say and the test holds. Nothing in it is wrapped in
+`<IfModule>` (the conventions test refuses one): on a stock Debian or Ubuntu Apache, which loads
+neither module, a wrapped file served the folder with no headers and no refusals and logged
+nothing; unwrapped, every request is a 500 and a line in the error log. Every value was measured in
 Chromium with the policy sent as a response header: without `img-src 'self'` the favicon is
 refused; without the empty string's hash in `style-src` react-native-web's `<style>` element is
 refused and the game draws unstyled (it fills that element through `insertRule`, which CSP does
@@ -199,9 +203,10 @@ pinned to the version whose Chromium CI installs.
 The website, and only the website, can offer Sign in with Google and one "Support this app"
 payment (one-time, granting `supporter`): the owner's integrations charter, per-app functions on
 the same origin, Stripe Checkout and its webhook, web first. `server/kit/` is the shared kit, copied
-byte for byte from the canonical copy and never edited here (a change there is a request to the
-kit, made in every repository at once); it lints and type-checks under this repository's own
-ESLint and tsconfig with nothing ignored, and `npm test` runs its self-test. `server/catalogue.js`
+byte for byte from the canonical copy, its `.d.ts` files included, and never edited here (a change
+there is a request to the kit, made in every repository at once); it lints and type-checks under
+this repository's own ESLint and tsconfig with nothing ignored, and `npm test` runs its self-test.
+`server/catalogue.js`
 sells the one product; `functions/api/[[path]].js` is the Cloudflare Pages entry (three lines,
 pinned by `server/api.test.mjs`); `server/start.mjs` the Node one on 127.0.0.1:8788, behind
 `deploy/nginx.conf`'s `location ^~ /api/`, whose one `add_header` is the server block's HSTS line

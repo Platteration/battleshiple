@@ -255,8 +255,12 @@ for every file in it. nginx also names no version in its `Server` header (`serve
 **Apache** reads `.htaccess` only where the server configuration lets it: give the published
 folder `AllowOverride All`. Debian and Ubuntu default to `AllowOverride None`, under which every
 header and refusal in the file is silently ignored, and `AllowOverride FileInfo` alone answers
-every request with a 500, since the file sets `Options`. The version in Apache's `Server` header
-is the server configuration's to turn off, with `ServerTokens Prod`: `.htaccess` cannot.
+every request with a 500, since the file sets `Options`. The file needs `mod_rewrite` and
+`mod_headers`, which a stock Debian or Ubuntu Apache does not load: `a2enmod rewrite headers`.
+Nothing in it is wrapped in `<IfModule>`, so without them every request is a 500 and a line in
+the error log, never the folder served with no headers and no refusals. The version in Apache's
+`Server` header is the server configuration's to turn off, with `ServerTokens Prod`: `.htaccess`
+cannot.
 
 **nginx**: `deploy/nginx.conf` listens with `listen 443 ssl http2`, which every nginx a current
 distribution ships loads (the `http2 on;` directive needs 1.25.1; Ubuntu 24.04 has 1.24). From
@@ -397,8 +401,12 @@ headers at all (as GitHub Pages serves it) and the safety net. It needs Chromium
 chromium`).
 
 CI runs the same steps one at a time, then bundles the app for Android, iOS and the web with
-`expo export` and runs the website suite; a separate job runs
-`npm audit --omit=dev --audit-level=high` against the lockfile.
+`expo export` and runs the website suite; a separate job runs `node .github/audit/npm-audit.mjs`,
+the shared audit gate: `npm audit --omit=dev` against the lockfile, failing on every high or
+critical advisory but those `.github/audit/accepted.json` accepts (braces and node-forge, which
+arrive only through build and development tooling, are in neither the app bundle nor the website,
+and have no release to take; each entry names every route it arrives by and expires within 90
+days).
 
 ### Seeing the UI
 

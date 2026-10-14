@@ -6,7 +6,10 @@
 # Apache reads this file only where the server configuration lets it: `AllowOverride All` for the
 # published folder. Debian and Ubuntu default to `AllowOverride None`, under which every line here
 # is silently ignored, and `AllowOverride FileInfo` alone answers every request with a 500, since
-# this file sets Options. The version in Apache's Server header is the server configuration's to
+# this file sets Options. It needs mod_rewrite and mod_headers, which a stock Debian or Ubuntu
+# Apache does not load (`a2enmod rewrite headers`): nothing here is wrapped in <IfModule>, so
+# without them every request is a 500 and a line in the error log, never the folder served with no
+# headers and no refusals. The version in Apache's Server header is the server configuration's to
 # turn off (`ServerTokens Prod`): this file cannot. And it covers the folder it is in and nothing
 # else, so publish the folder the build writes, never the repository.
 #
@@ -22,14 +25,11 @@ AddDefaultCharset utf-8
 ErrorDocument 404 /404.html
 ErrorDocument 403 /404.html
 
-<IfModule mod_mime.c>
   AddType text/javascript .js
   AddType text/css .css
   AddType image/x-icon .ico
   AddType text/plain .txt
-</IfModule>
 
-<IfModule mod_rewrite.c>
   RewriteEngine On
   # everything over https
   RewriteCond %{HTTPS} !=on
@@ -43,9 +43,7 @@ ErrorDocument 403 /404.html
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteCond %{REQUEST_FILENAME}/index.html !-f
   RewriteRule ^ - [R=404,L]
-</IfModule>
 
-<IfModule mod_headers.c>
   Header always set Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests; require-trusted-types-for 'script'; trusted-types 'none'"
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "DENY"
@@ -63,4 +61,3 @@ ErrorDocument 403 /404.html
   <Else>
     Header always set Cache-Control "no-cache"
   </Else>
-</IfModule>

@@ -413,7 +413,7 @@ describe('the files a site carries', () => {
       Contact: 'https://github.com/Platteration/battleshiple/issues',
       Expires: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/),
       'Preferred-Languages': 'en',
-      Policy: 'https://github.com/Platteration/battleshiple/blob/HEAD/SECURITY.md',
+      Policy: 'https://github.com/Platteration/battleshiple/blob/main/SECURITY.md',
     });
     const left = Date.parse(fields.Expires ?? '') - Date.now(); // its presence is checked just above
     expect(left).toBeGreaterThan(0); // renew it: a year from the day it is written
@@ -422,9 +422,11 @@ describe('the files a site carries', () => {
 
   it('says what Apache needs of the server configuration, where a deployer reads it', () => {
     // Under Debian's and Ubuntu's AllowOverride None the whole file is silently ignored, and
-    // ServerTokens is the server configuration's: .htaccess cannot set it.
+    // ServerTokens is the server configuration's: .htaccess cannot set it. Nothing in the file is
+    // wrapped in <IfModule> (test/conventions.mjs), so on an Apache without mod_rewrite and
+    // mod_headers, which Debian and Ubuntu do not load, every request is a 500.
     for (const [file, text] of [['public/.htaccess', HTACCESS], ['README.md', read('README.md')]] as const) {
-      expect([file, text.includes('AllowOverride All'), text.includes('ServerTokens Prod')]).toEqual([file, true, true]);
+      expect([file, text.includes('AllowOverride All'), text.includes('ServerTokens Prod'), text.includes('a2enmod rewrite headers')]).toEqual([file, true, true, true]);
     }
     expect(HTACCESS).not.toMatch(/^\s*ServerTokens\b/m);
   });

@@ -52,8 +52,20 @@ function CellContent({ cell, size }: { cell: CellView; size: number }) {
       <View
         key="hitHalo"
         style={[
-          styles.hitHalo,
-          { width: size * 0.62, height: size * 0.62, borderRadius: size * 0.31, backgroundColor: p.pencil.hitHalo },
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: s.sunk ? colors.sunk : shipColors[s.classId],
+            opacity: s.sunk ? 0.9 : s.ready ? 1 : 0.6,
+            margin: 1,
+            borderRadius: 4,
+            borderWidth: 1,
+            borderTopColor: 'rgba(255,255,255,0.5)',
+            borderLeftColor: 'rgba(255,255,255,0.3)',
+            borderRightColor: 'rgba(0,0,0,0.3)',
+            borderBottomColor: 'rgba(0,0,0,0.45)',
+            borderBottomWidth: 3,
+          },
+          s.selected && styles.selectedShip,
         ]}
       />,
       <Text key="hit" style={[styles.hitMark, { fontSize }]}>
